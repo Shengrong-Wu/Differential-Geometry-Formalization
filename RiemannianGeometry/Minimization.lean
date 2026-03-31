@@ -1,0 +1,5 @@
+import Minimization.NormalNeighborhoods
+import Minimization.NormalCoordinateKinematics
+import Minimization.MetricBridge
+import Minimization.LocalMinimizers
+import Minimization.ShortGeodesicsMinimize

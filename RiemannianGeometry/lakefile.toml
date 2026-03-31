@@ -1,0 +1,60 @@
+name = "SecondBianchi"
+version = "0.1.0"
+defaultTargets = ["SecondBianchi", "Metric", "LeviCivita", "Geodesic", "Exponential", "Minimization", "HopfRinow", "Curvature", "ParallelTransport", "Jacobi", "Comparison", "Measure", "ODE"]
+
+[leanOptions]
+pp.unicode.fun = true
+relaxedAutoImplicit = false
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.28.0"
+
+[[lean_lib]]
+name = "SecondBianchi"
+
+[[lean_lib]]
+name = "Bochner"
+
+[[lean_lib]]
+name = "Weitzenbock"
+
+[[lean_lib]]
+name = "Variation"
+
+[[lean_lib]]
+name = "Metric"
+
+[[lean_lib]]
+name = "LeviCivita"
+
+[[lean_lib]]
+name = "Geodesic"
+
+[[lean_lib]]
+name = "Exponential"
+
+[[lean_lib]]
+name = "Minimization"
+
+[[lean_lib]]
+name = "HopfRinow"
+
+[[lean_lib]]
+name = "Curvature"
+
+[[lean_lib]]
+name = "ParallelTransport"
+
+[[lean_lib]]
+name = "Jacobi"
+
+[[lean_lib]]
+name = "Comparison"
+
+[[lean_lib]]
+name = "Measure"
+
+[[lean_lib]]
+name = "ODE"
