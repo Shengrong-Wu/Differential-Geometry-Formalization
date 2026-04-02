@@ -169,7 +169,6 @@ theorem antitoneOn_scalarWronskian_of_subsolution
     simpa [isOpen_modelPosDomain k |>.interior_eq] using hnonpos
   exact antitoneOn_of_deriv_nonpos (modelPosDomain_convex k) hcont hdiffInterior hnonposInterior
 
-/-- Differentiability at the origin recovered from a nonzero stored derivative value. -/
 theorem hasDerivAt_of_deriv_eq_one
     {f : ℝ → ℝ}
     (h : deriv f 0 = 1) :
@@ -181,14 +180,21 @@ theorem hasDerivAt_of_deriv_eq_one
   simpa [h] using hdiff.hasDerivAt
 
 /-- The ratio against the identity tends to the stored initial slope at the origin. -/
+theorem tendsto_div_id_at_zero_of_hasDerivAt
+    {y : ℝ → ℝ} {a : ℝ}
+    (hy0 : y 0 = 0)
+    (hya : HasDerivAt y a 0) :
+    Filter.Tendsto (fun t : ℝ => y t / t) (𝓝[>] (0 : ℝ)) (𝓝 a) := by
+  simpa [div_eq_mul_inv, hy0, sub_eq_add_neg, mul_comm, mul_left_comm, mul_assoc] using
+    hya.tendsto_slope_zero_right
+
+/-- The `a = 1` specialization retained for compatibility. -/
 theorem tendsto_div_id_at_zero_of_initial
     {y : ℝ → ℝ}
     (hy0 : y 0 = 0)
     (hy1 : deriv y 0 = 1) :
     Filter.Tendsto (fun t : ℝ => y t / t) (𝓝[>] (0 : ℝ)) (𝓝 1) := by
-  have hy' : HasDerivAt y 1 0 := hasDerivAt_of_deriv_eq_one hy1
-  simpa [div_eq_mul_inv, hy0, sub_eq_add_neg, mul_comm, mul_left_comm, mul_assoc] using
-    hy'.tendsto_slope_zero_right
+  exact tendsto_div_id_at_zero_of_hasDerivAt hy0 (hasDerivAt_of_deriv_eq_one hy1)
 
 /-- The canonical scalar model is asymptotic to the identity at the origin. -/
 theorem tendsto_sn_div_id_at_zero
@@ -200,21 +206,30 @@ theorem tendsto_sn_div_id_at_zero
     (sn_hasModelInitialConditions k).1] using
     hsn'.tendsto_slope_zero_right
 
-/-- Any scalar function with the same first-order initial data as `sn k` has ratio `y / sn k`
-tending to `1` from the right at the origin. -/
-theorem tendsto_div_sn_at_zero_of_initial
-    {k : ℝ} {y : ℝ → ℝ}
+/-- Any scalar function with stored first-order initial data has ratio `y / sn k`
+tending to that stored initial slope from the right at the origin. -/
+theorem tendsto_div_sn_at_zero_of_initialSlope
+    {k : ℝ} {y : ℝ → ℝ} {a : ℝ}
     (hy0 : y 0 = 0)
-    (hy1 : deriv y 0 = 1) :
-    Filter.Tendsto (fun t : ℝ => y t / sn k t) (𝓝[>] (0 : ℝ)) (𝓝 1) := by
+    (hya : HasDerivAt y a 0) :
+    Filter.Tendsto (fun t : ℝ => y t / sn k t) (𝓝[>] (0 : ℝ)) (𝓝 a) := by
   have hquot :=
-    (tendsto_div_id_at_zero_of_initial hy0 hy1).div (tendsto_sn_div_id_at_zero k) (by norm_num : (1 : ℝ) ≠ 0)
+    (tendsto_div_id_at_zero_of_hasDerivAt hy0 hya).div
+      (tendsto_sn_div_id_at_zero k) (by norm_num : (1 : ℝ) ≠ 0)
   have hcongr :
       ((fun t : ℝ => (y t / t) / (sn k t / t)) =ᶠ[𝓝[>] (0 : ℝ)] fun t => y t / sn k t) := by
     filter_upwards [self_mem_nhdsWithin] with t ht
     have ht0 : t ≠ 0 := ne_of_gt ht
     field_simp [ht0]
   simpa using hquot.congr' hcongr
+
+/-- The `a = 1` specialization retained for compatibility. -/
+theorem tendsto_div_sn_at_zero_of_initial
+    {k : ℝ} {y : ℝ → ℝ}
+    (hy0 : y 0 = 0)
+    (hy1 : deriv y 0 = 1) :
+    Filter.Tendsto (fun t : ℝ => y t / sn k t) (𝓝[>] (0 : ℝ)) (𝓝 1) := by
+  exact tendsto_div_sn_at_zero_of_initialSlope hy0 (hasDerivAt_of_deriv_eq_one hy1)
 
 /-- The comparison ratio against the canonical scalar model. -/
 noncomputable def scalarComparisonRatio
@@ -266,11 +281,11 @@ theorem antitoneOn_scalarComparisonRatio
   exact antitoneOn_of_deriv_nonpos (modelPosDomain_convex k) hcont hdiffInterior hnonposInterior
 
 /-- Owner theorem: the Wronskian sign is derived internally from the honest scalar ODE data and
-initial conditions, so the public scalar comparison route no longer needs an external witness. -/
-theorem scalarWronskianUpperBound_of_subsolution
-    {k : ℝ} {y : ℝ → ℝ}
+initial conditions, for an arbitrary initial slope. -/
+theorem scalarWronskianUpperBound_of_subsolution_with_initialSlope
+    {k : ℝ} {y : ℝ → ℝ} {a : ℝ}
     (hy0 : y 0 = 0)
-    (hy1 : deriv y 0 = 1)
+    (hya : HasDerivAt y a 0)
     (hy :
       ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k → HasDerivAt y (deriv y t) t)
     (hy2ineq :
@@ -284,12 +299,12 @@ theorem scalarWronskianUpperBound_of_subsolution
   have hantiW : AntitoneOn (scalarWronskian k y) (modelPosDomain k) :=
     antitoneOn_scalarWronskian_of_subsolution hy hy2ineq
   have hlimRatio :
-      Filter.Tendsto ratio (𝓝[>] (0 : ℝ)) (𝓝 1) :=
-    tendsto_div_sn_at_zero_of_initial hy0 hy1
-  have hratioNear : ∀ᶠ u : ℝ in 𝓝[>] (0 : ℝ), |ratio u - 1| < (1 / 4 : ℝ) := by
+      Filter.Tendsto ratio (𝓝[>] (0 : ℝ)) (𝓝 a) :=
+    tendsto_div_sn_at_zero_of_initialSlope hy0 hya
+  have hratioNear : ∀ᶠ u : ℝ in 𝓝[>] (0 : ℝ), |ratio u - a| < (1 / 4 : ℝ) := by
     simpa [one_div, Set.mem_setOf_eq] using hlimRatio.eventually (by
       simpa [Metric.ball, Real.dist_eq, Set.mem_setOf_eq] using
-        Metric.ball_mem_nhds (1 : ℝ) (by norm_num : 0 < (1 / 4 : ℝ)))
+        Metric.ball_mem_nhds a (by norm_num : 0 < (1 / 4 : ℝ)))
   have hsnNear : ∀ᶠ u : ℝ in 𝓝[>] (0 : ℝ), sn k u / u < (2 : ℝ) := by
     exact (tendsto_sn_div_id_at_zero k).eventually (Iio_mem_nhds (by norm_num : (1 : ℝ) < 2))
   rw [(nhdsGT_basis 0).eventually_iff] at hratioNear hsnNear
@@ -418,16 +433,16 @@ theorem scalarWronskianUpperBound_of_subsolution
       dsimp [δ]
       exact min_le_of_right_le (min_le_left _ _)
     exact lt_of_lt_of_le h2s_lt_δ hδ_le_δratio
-  have hs_ratio : |ratio s - 1| < (1 / 4 : ℝ) := hδratio ⟨hs_pos, hs_lt_δratio⟩
-  have h2s_ratio : |ratio (2 * s) - 1| < (1 / 4 : ℝ) := hδratio ⟨h2s_pos, h2s_lt_δratio⟩
+  have hs_ratio : |ratio s - a| < (1 / 4 : ℝ) := hδratio ⟨hs_pos, hs_lt_δratio⟩
+  have h2s_ratio : |ratio (2 * s) - a| < (1 / 4 : ℝ) := hδratio ⟨h2s_pos, h2s_lt_δratio⟩
   have hdiff_abs : |ratio (2 * s) - ratio s| < (1 / 2 : ℝ) := by
     refine abs_lt.mpr ?_
     constructor
-    · have hAlo : -(1 / 4 : ℝ) < ratio (2 * s) - 1 := (abs_lt.mp h2s_ratio).1
-      have hBhi : ratio s - 1 < (1 / 4 : ℝ) := (abs_lt.mp hs_ratio).2
+    · have hAlo : -(1 / 4 : ℝ) < ratio (2 * s) - a := (abs_lt.mp h2s_ratio).1
+      have hBhi : ratio s - a < (1 / 4 : ℝ) := (abs_lt.mp hs_ratio).2
       linarith
-    · have hAhi : ratio (2 * s) - 1 < (1 / 4 : ℝ) := (abs_lt.mp h2s_ratio).2
-      have hBlo : -(1 / 4 : ℝ) < ratio s - 1 := (abs_lt.mp hs_ratio).1
+    · have hAhi : ratio (2 * s) - a < (1 / 4 : ℝ) := (abs_lt.mp h2s_ratio).2
+      have hBlo : -(1 / 4 : ℝ) < ratio s - a := (abs_lt.mp hs_ratio).1
       linarith
   have hhalf_lt : (1 / 2 : ℝ) < ratio (2 * s) - ratio s := by
     exact lt_of_lt_of_le (by norm_num) hdiff_ge_one
@@ -435,8 +450,65 @@ theorem scalarWronskianUpperBound_of_subsolution
     lt_of_lt_of_le hhalf_lt (le_abs_self _)
   linarith
 
+/-- The `a = 1` specialization retained for compatibility. -/
+theorem scalarWronskianUpperBound_of_subsolution
+    {k : ℝ} {y : ℝ → ℝ}
+    (hy0 : y 0 = 0)
+    (hy1 : deriv y 0 = 1)
+    (hy :
+      ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k → HasDerivAt y (deriv y t) t)
+    (hy2ineq :
+      ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k →
+        HasDerivAt (deriv y) (deriv (deriv y) t) t ∧
+          deriv (deriv y) t + k * y t ≤ 0) :
+    ScalarWronskianUpperBound k y := by
+  exact scalarWronskianUpperBound_of_subsolution_with_initialSlope
+    hy0 (hasDerivAt_of_deriv_eq_one hy1) hy hy2ineq
+
 /-- Owner theorem for the scalar comparison layer once the Wronskian sign has been derived: the
 subsolution stays below the canonical constant-curvature model on `modelPosDomain`. -/
+theorem scalarComparison_of_wronskianNonpos_with_initialSlope
+    {k : ℝ} {y : ℝ → ℝ} {a : ℝ}
+    (hy0 : y 0 = 0)
+    (hya : HasDerivAt y a 0)
+    (hy :
+      ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k → HasDerivAt y (deriv y t) t)
+    (hW : ScalarWronskianUpperBound k y) :
+    ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k → y t ≤ a * sn k t := by
+  let ratio := scalarComparisonRatio k y
+  have hanti : AntitoneOn ratio (modelPosDomain k) :=
+    antitoneOn_scalarComparisonRatio hy hW
+  have hlim : Filter.Tendsto ratio (𝓝[>] (0 : ℝ)) (𝓝 a) :=
+    tendsto_div_sn_at_zero_of_initialSlope hy0 hya
+  intro t ht
+  have ht0 : 0 < t := zero_lt_of_mem_modelPosDomain ht
+  by_cases hratio : ratio t ≤ a
+  · have hsnpos : 0 < sn k t := sn_pos_of_mem_modelPosDomain ht
+    dsimp [ratio, scalarComparisonRatio] at hratio
+    simpa using (div_le_iff₀ hsnpos).mp hratio
+  · have hlt : Set.Iio t ∈ 𝓝[>] (0 : ℝ) :=
+      nhdsWithin_le_nhds (Iio_mem_nhds ht0)
+    set ε : ℝ := (ratio t - a) / 2 with hεdef
+    have hεpos : 0 < ε := by
+      have : a < ratio t := lt_of_not_ge hratio
+      linarith
+    have hnear : {s : ℝ | ratio s < a + ε} ∈ 𝓝[>] (0 : ℝ) := by
+      exact hlim.eventually (Iio_mem_nhds (by linarith [hεpos]))
+    have hsmall :
+        {s : ℝ | s ∈ modelPosDomain k ∧ s < t ∧ ratio s < a + ε} ∈ 𝓝[>] (0 : ℝ) := by
+      filter_upwards [self_mem_nhdsWithin, hlt, hnear] with s hs0 hst hsratio
+      exact ⟨modelPosDomain_downward_closed ht hs0 hst, hst, hsratio⟩
+    obtain ⟨s, hsdom, hst, hsratio⟩ :
+        ∃ s : ℝ, s ∈ modelPosDomain k ∧ s < t ∧ ratio s < a + ε := by
+      rcases (Filter.nonempty_of_mem hsmall) with ⟨s, hs⟩
+      exact ⟨s, hs.1, hs.2.1, hs.2.2⟩
+    have hanti_st : ratio t ≤ ratio s :=
+      hanti hsdom ht hst.le
+    have hlt_ratio : a + ε < ratio t := by
+      linarith [hεdef]
+    linarith
+
+/-- The `a = 1` specialization retained for compatibility. -/
 theorem scalarComparison_of_wronskianNonpos
     {k : ℝ} {y : ℝ → ℝ}
     (hy0 : y 0 = 0)
@@ -445,41 +517,26 @@ theorem scalarComparison_of_wronskianNonpos
       ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k → HasDerivAt y (deriv y t) t)
     (hW : ScalarWronskianUpperBound k y) :
     ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k → y t ≤ sn k t := by
-  let ratio := scalarComparisonRatio k y
-  have hanti : AntitoneOn ratio (modelPosDomain k) :=
-    antitoneOn_scalarComparisonRatio hy hW
-  have hlim : Filter.Tendsto ratio (𝓝[>] (0 : ℝ)) (𝓝 1) :=
-    tendsto_div_sn_at_zero_of_initial hy0 hy1
-  intro t ht
-  have ht0 : 0 < t := zero_lt_of_mem_modelPosDomain ht
-  by_cases hratio : ratio t ≤ 1
-  · have hsnpos : 0 < sn k t := sn_pos_of_mem_modelPosDomain ht
-    dsimp [ratio, scalarComparisonRatio] at hratio
-    simpa using (div_le_iff₀ hsnpos).mp hratio
-  · have hlt : Set.Iio t ∈ 𝓝[>] (0 : ℝ) :=
-      nhdsWithin_le_nhds (Iio_mem_nhds ht0)
-    set ε : ℝ := (ratio t - 1) / 2 with hεdef
-    have hεpos : 0 < ε := by
-      have : 1 < ratio t := lt_of_not_ge hratio
-      linarith
-    have hnear : {s : ℝ | ratio s < 1 + ε} ∈ 𝓝[>] (0 : ℝ) := by
-      exact hlim.eventually (Iio_mem_nhds (by linarith [hεpos]))
-    have hsmall :
-        {s : ℝ | s ∈ modelPosDomain k ∧ s < t ∧ ratio s < 1 + ε} ∈ 𝓝[>] (0 : ℝ) := by
-      filter_upwards [self_mem_nhdsWithin, hlt, hnear] with s hs0 hst hsratio
-      exact ⟨modelPosDomain_downward_closed ht hs0 hst, hst, hsratio⟩
-    obtain ⟨s, hsdom, hst, hsratio⟩ :
-        ∃ s : ℝ, s ∈ modelPosDomain k ∧ s < t ∧ ratio s < 1 + ε := by
-      rcases (Filter.nonempty_of_mem hsmall) with ⟨s, hs⟩
-      exact ⟨s, hs.1, hs.2.1, hs.2.2⟩
-    have hanti_st : ratio t ≤ ratio s :=
-      hanti hsdom ht hst.le
-    have hlt_ratio : 1 + ε < ratio t := by
-      linarith [hεdef]
-    linarith
+  simpa using scalarComparison_of_wronskianNonpos_with_initialSlope
+    (a := (1 : ℝ)) hy0 (hasDerivAt_of_deriv_eq_one hy1) hy hW
 
 /-- Public owner theorem for scalar comparison: the Wronskian sign is now derived internally from
 the honest scalar ODE/subsolution data and initial conditions. -/
+theorem scalarComparison_of_subsolution_with_initialSlope
+    {k : ℝ} {y : ℝ → ℝ} {a : ℝ}
+    (hy0 : y 0 = 0)
+    (hya : HasDerivAt y a 0)
+    (hy :
+      ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k → HasDerivAt y (deriv y t) t)
+    (hy2ineq :
+      ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k →
+        HasDerivAt (deriv y) (deriv (deriv y) t) t ∧
+          deriv (deriv y) t + k * y t ≤ 0) :
+    ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k → y t ≤ a * sn k t :=
+  scalarComparison_of_wronskianNonpos_with_initialSlope hy0 hya hy
+    (scalarWronskianUpperBound_of_subsolution_with_initialSlope hy0 hya hy hy2ineq)
+
+/-- The `a = 1` specialization retained for compatibility. -/
 theorem scalarComparison_of_subsolution
     {k : ℝ} {y : ℝ → ℝ}
     (hy0 : y 0 = 0)
@@ -490,8 +547,105 @@ theorem scalarComparison_of_subsolution
       ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k →
         HasDerivAt (deriv y) (deriv (deriv y) t) t ∧
           deriv (deriv y) t + k * y t ≤ 0) :
-    ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k → y t ≤ sn k t :=
-  scalarComparison_of_wronskianNonpos hy0 hy1 hy
-    (scalarWronskianUpperBound_of_subsolution hy0 hy1 hy hy2ineq)
+    ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k → y t ≤ sn k t := by
+  simpa using scalarComparison_of_subsolution_with_initialSlope
+    (a := (1 : ℝ)) hy0 (hasDerivAt_of_deriv_eq_one hy1) hy hy2ineq
+
+/-- Zero-initial-data positivity theorem for the supersolution orientation. -/
+theorem scalarPositivity_of_zeroInitial_supersolution
+    {k : ℝ} {u : ℝ → ℝ}
+    (hu0 : u 0 = 0)
+    (huAt0 : HasDerivAt u 0 0)
+    (hu :
+      ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k → HasDerivAt u (deriv u t) t)
+    (hu2ineq :
+      ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k →
+        HasDerivAt (deriv u) (deriv (deriv u) t) t ∧
+          0 ≤ deriv (deriv u) t + k * u t) :
+    ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k → 0 ≤ u t := by
+  have hv0 : (fun s : ℝ => -u s) 0 = 0 := by simpa [hu0]
+  have hvAt0 : HasDerivAt (fun s : ℝ => -u s) 0 0 := by
+    simpa using huAt0.neg
+  have hv :
+      ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k →
+        HasDerivAt (fun s : ℝ => -u s) (deriv (fun s : ℝ => -u s) t) t := by
+    intro t ht
+    simpa using (hu ht).neg
+  have hv2ineq :
+      ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k →
+        HasDerivAt (deriv (fun s : ℝ => -u s)) (deriv (deriv (fun s : ℝ => -u s)) t) t ∧
+          deriv (deriv (fun s : ℝ => -u s)) t + k * (fun s : ℝ => -u s) t ≤ 0 := by
+    intro t ht
+    refine ⟨?_, ?_⟩
+    · simpa using (hu2ineq ht).1.neg
+    · have hmain : 0 ≤ deriv (deriv u) t + k * u t := (hu2ineq ht).2
+      have hneg : -(deriv (deriv u) t + k * u t) ≤ 0 := by linarith
+      simpa [sub_eq_add_neg, add_comm, add_left_comm, add_assoc, mul_comm, mul_left_comm] using hneg
+  intro t ht
+  have hneg : (fun s : ℝ => -u s) t ≤ (0 : ℝ) * sn k t :=
+    scalarComparison_of_subsolution_with_initialSlope (a := 0) hv0 hvAt0 hv hv2ineq ht
+  simpa using hneg
+
+/-- Supersolution-side scalar comparison obtained by subtracting the model solution. -/
+theorem scalarComparison_of_supersolution
+    {k : ℝ} {y : ℝ → ℝ}
+    (hy0 : y 0 = 0)
+    (hy1 : deriv y 0 = 1)
+    (hy :
+      ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k → HasDerivAt y (deriv y t) t)
+    (hy2ineq :
+      ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k →
+        HasDerivAt (deriv y) (deriv (deriv y) t) t ∧
+          0 ≤ deriv (deriv y) t + k * y t) :
+    ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k → sn k t ≤ y t := by
+  let v : ℝ → ℝ := fun t => sn k t - y t
+  let v' : ℝ → ℝ := fun t => deriv (sn k) t - deriv y t
+  have hv_raw :
+      ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k → HasDerivAt v (v' t) t := by
+    intro t ht
+    simpa [v, v'] using (hasDerivAt_sn k t).sub (hy ht)
+  have hv_eqOn : Set.EqOn (deriv v) v' (modelPosDomain k) := by
+    refine deriv_eqOn (isOpen_modelPosDomain k) ?_
+    intro t ht
+    exact (hv_raw ht).hasDerivWithinAt
+  have hv2_raw :
+      ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k →
+        HasDerivAt v' (-k * sn k t - deriv (deriv y) t) t := by
+    intro t ht
+    simpa [v', sub_eq_add_neg, add_comm, add_left_comm, add_assoc, mul_comm, mul_left_comm,
+      mul_assoc] using (hasDerivAt_deriv_sn k t).sub (hy2ineq ht).1
+  have hv0 : v 0 = 0 := by
+    simp [v, hy0, (sn_hasModelInitialConditions k).1]
+  have hvAt0 : HasDerivAt v 0 0 := by
+    simpa [v, hy1, deriv_sn_zero k] using
+      (hasDerivAt_sn k 0).sub (hasDerivAt_of_deriv_eq_one hy1)
+  have hv :
+      ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k → HasDerivAt v (deriv v t) t := by
+    intro t ht
+    exact (hv_raw ht).congr_deriv (hv_eqOn ht).symm
+  have hv2ineq :
+      ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k →
+        HasDerivAt (deriv v) (deriv (deriv v) t) t ∧
+          deriv (deriv v) t + k * v t ≤ 0 := by
+    intro t ht
+    have hderiv_eventually :
+        deriv v =ᶠ[𝓝 t] v' := by
+      filter_upwards [(isOpen_modelPosDomain k).mem_nhds ht] with s hs
+      exact hv_eqOn hs
+    have hv2_at : HasDerivAt (deriv v) (-k * sn k t - deriv (deriv y) t) t := by
+      exact (hv2_raw ht).congr_of_eventuallyEq hderiv_eventually
+    refine ⟨?_, ?_⟩
+    · exact hv2_at.congr_deriv hv2_at.deriv.symm
+    · have hmain : 0 ≤ deriv (deriv y) t + k * y t := (hy2ineq ht).2
+      have hsub : (-k * sn k t - deriv (deriv y) t) + k * (sn k t - y t) ≤ 0 := by
+        nlinarith
+      rw [hv2_at.deriv]
+      simpa [v, sub_eq_add_neg, add_comm, add_left_comm, add_assoc, mul_comm, mul_left_comm,
+        mul_assoc] using hsub
+  intro t ht
+  have hsub : v t ≤ (0 : ℝ) * sn k t :=
+    scalarComparison_of_subsolution_with_initialSlope (a := 0) hv0 hvAt0 hv hv2ineq ht
+  have hnonpos : v t ≤ 0 := by simpa [v] using hsub
+  simpa [v] using hnonpos
 
 end Comparison

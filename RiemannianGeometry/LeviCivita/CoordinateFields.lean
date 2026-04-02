@@ -486,6 +486,15 @@ noncomputable def covariantDerivative
 def tensorAt (g : SmoothTensor2Field n) (x : Coord n) : Metric.Coordinate.Tensor2 n :=
   fun i j => g i j x
 
+theorem SmoothTensor2Field.continuousOn_tensorAt
+    (g : SmoothTensor2Field n) {s : Set (Coord n)} :
+    ContinuousOn (fun x => tensorAt g x) s := by
+  refine continuousOn_pi.2 ?_
+  intro i
+  refine continuousOn_pi.2 ?_
+  intro j
+  simpa [tensorAt] using (g.smooth' i j).continuous.continuousOn
+
 /-- Pointwise symmetry of a smooth coordinate metric field. -/
 def IsSymmetricField (g : SmoothTensor2Field n) : Prop :=
   ∀ x : Coord n, Metric.Coordinate.IsSymmetric (tensorAt g x)

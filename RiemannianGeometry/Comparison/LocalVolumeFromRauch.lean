@@ -16,21 +16,21 @@ variable {n : ℕ}
 
 /-- Bridge structure tying together:
 - a `VolumeDensityComparisonData` specifying the exponential map, metric, and model density,
-- a `LocalVolumeComparisonConstruction` carrying the Rauch-to-density bridge. -/
+- a bridge-free local-volume construction whose Jacobian majorant is expected to come from Rauch. -/
 structure LocalVolumeFromRauchData (n : ℕ) where
-  construction : LocalVolumeComparisonConstruction (n := n)
+  construction : LocalVolumeComparisonConstructionFromJacobianBound (n := n)
 
 /-- **Local volume density comparison from the Rauch bridge.**
 If the construction carries a valid Rauch→density bridge, then local comparison holds. -/
 theorem localVolumeDensityComparison_of_rauchBridge
     (data : LocalVolumeFromRauchData n) :
     HasLocalVolumeDensityComparison data.construction.data :=
-  localVolumeDensityComparison_of_construction data.construction
+  localVolumeDensityComparison_of_jacobianConstruction data.construction
 
 /-- Log-Jacobian differential inequality from the Rauch bridge. -/
 theorem logJacobianDifferentialInequality_of_rauchBridge
     (data : LocalVolumeFromRauchData n) :
     HasLogJacobianDifferentialInequality data.construction.data :=
-  logJacobianDifferentialInequality_of_construction data.construction
+  logJacobianDifferentialInequality_of_jacobianConstruction data.construction
 
 end Comparison

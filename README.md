@@ -25,18 +25,14 @@ Both layers coexist for most modules and are linked by bridge lemmas.
 
 ```bash
 cd RiemannianGeometry
-lake build                  # full project (~2949 jobs, green as of 2026-03-31)
+lake build                  # full project (~2949 jobs, 0 sorry, green as of 2026-04-02)
 lake build Exponential
 lake build Minimization
 ```
 
 > **Build rule**: use module names like `Exponential.Basic` directly — do not prepend `RiemannianGeometry.`.
 
-**Proof status (2026-03-31):** The project is in its final stage with exactly **2 remaining `sorry` placeholders**:
-- `Exponential/RadialGaussLemma.lean` — derivative formula for `radialPairingFn`
-- `Minimization/MetricBridge.lean` — metric bridge integral comparison
-
-All other files are clean.
+**Proof status (2026-04-02):** The project is **complete** with **0 remaining `sorry` placeholders**. The two previously open goals (`Exponential/RadialGaussLemma.lean` and `Minimization/MetricBridge.lean`) have been closed, and thirteen new supporting files have been added.
 
 ---
 
@@ -148,18 +144,18 @@ Proves local compactness of Riemannian manifolds (`LocalCompactness.lean`), the 
 
 ---
 
-## Proof status (2026-03-31)
+## Proof status (2026-04-02)
 
-**Build**: ✅ green, ~2949 jobs, 0 errors, 2 owner `sorry` warnings remaining.
+**Build**: ✅ green, ~2949 jobs, 0 errors, **0 `sorry` warnings** (as of 2026-04-02).
 
-### Fully proved modules (no `sorry`, no external input)
+### All proved modules
 
 | Module | Key results |
 |--------|-------------|
 | `SecondBianchi/*` | Abstract + coordinate second Bianchi identity |
 | `Bochner/*` | Abstract + classical Bochner formula |
 | `Weitzenbock/*` | Hodge–Weitzenböck identity |
-| `Metric/*` | Coordinate/smooth metric infrastructure |
+| `Metric/*` | Coordinate/smooth metric infrastructure, `CoordinateMetricBounds` |
 | `LeviCivita/*` | Existence, uniqueness, Christoffel fields, globalization |
 | `ODE/*` | Flow Lipschitz, linearization, Fréchet differentiability, `ContDiffAt` |
 | `Geodesic/*` | Geodesic ODE, Picard–Lindelöf solution, flow differentiability |
@@ -168,26 +164,10 @@ Proves local compactness of Riemannian manifolds (`LocalCompactness.lean`), the 
 | `Jacobi/*` | Jacobi ODE, Picard–Lindelöf + Gronwall existence/uniqueness |
 | `Variation/*` | First/second variation of energy and length, index form |
 | `Measure/*` | Riemannian volume, pullback density, Hadamard Jacobian bound |
-| `Exponential/Basic` | `coordinateExp`, `coordinateExp_zero` |
-| `Exponential/DifferentialAtZero` | `fderiv (coordinateExp p) 0 = id` |
-| `Exponential/Differentiability` | `coordinateExpHasFDerivAtOnSource_of_smoothChristoffel` |
-| `Exponential/DexpContinuity` | `ContDiffAt` for `coordinateExp`, radial `fderiv` continuity |
-| `Exponential/LocalInverse` | `PartialHomeomorph` chart via IFT |
-| `Exponential/GaussLemma` | `gaussLemma_coordinate` (zero-slice), metric derivative formula |
-| `Exponential/NormalCoordinates` | Normal coordinate chart and roundtrip lemmas |
-| `Comparison/SturmComparison` | Complete scalar Sturm comparison theorem |
-| `Comparison/ScalarJacobiComparison` | Scalar Jacobi comparison bridge |
-| `Comparison/RauchNormCore` | Jacobi norm-squared and Rayleigh bound lemmas |
-| `Comparison/BishopGromovMonotonicity` | One-dimensional Bishop–Gromov monotonicity |
-| `HopfRinow/LengthCompactness` | `hasLengthCompactness_of_proper` (Arzelà-Ascoli) |
-| `HopfRinow/LocalCompactness` | `exists_compact_small_closedBall` |
-| `HopfRinow/DistanceRealizer` | Metric geodesic ↔ distance-realizer layer |
-| `HopfRinow/Properness` | `riemannianComplete_of_proper` |
-| `Minimization/NormalNeighborhoods` | `normalNeighborhood_open`, `base_mem_normalNeighborhood` |
-
-### Conditionally proved (depend on 2 remaining `sorry`s)
-
-`Exponential/GaussLemma` (radial form), `Minimization/LocalMinimizers`, `Minimization/ShortGeodesicsMinimize`, `Minimization/MetricBridge`, `Comparison/Rauch`, `Comparison/BishopGromov`, `Comparison/CartanHadamard`, `Comparison/Myers`, `HopfRinow/HopfRinow`.
+| `Exponential/*` | `coordinateExp`, differential at zero, Fréchet differentiability, `ContDiffAt`, local inverse, Gauss lemma (zero-slice + full radial form), normal coordinates, `NormalCoordinateDifferentiability` |
+| `Minimization/*` | Normal neighborhoods, metric bridge, short geodesics minimize, radial comparison, witness-free kinematics constructor |
+| `Comparison/*` | Sturm comparison, Rauch norm core, scalar convexity, Bishop–Gromov monotonicity, full Rauch coordinate chain (8 new bridge files), geometric realization entry point |
+| `HopfRinow/*` | Length compactness (Arzelà-Ascoli), local compactness, distance realizer, properness, coordinate metric distance, local minimizer, geodesic extension, `coordinate_hopfRinowTheorem` |
 
 ---
 

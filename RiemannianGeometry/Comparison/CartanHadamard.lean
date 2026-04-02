@@ -19,10 +19,9 @@ a covering map.
 - `scalarComparison_on_Ioi_of_nonpos`: Sturm comparison on `(0,∞)` when `k ≤ 0`
 
 ### Jacobi-to-scalar bridge
-- `ScalarJacobiReduction`: structure packaging the norm of a vector Jacobi field
-  as a scalar function with the correct ODE data
-- `scalarJacobi_pos_of_nonneg_curvature_term`: the scalar Jacobi norm stays positive
-  under nonpositive curvature via the convexity argument
+- `SquaredNormJacobiReduction`: preferred owner-layer package for `‖J(t)‖²`,
+  avoiding the singular norm interface at `t = 0`
+- `ScalarJacobiReduction`: legacy norm-level package retained for compatibility
 
 ### Cartan-Hadamard conclusions
 - `noConjugatePoints_of_scalarJacobiReduction`: no conjugate points from the reduction
@@ -103,10 +102,46 @@ theorem scalarComparison_on_Ioi_of_nonpos
 
 /-! ### Jacobi-to-scalar bridge
 
-The bridge from vector Jacobi fields to scalar norm functions. Under nonpositive
-curvature, the key fact is that the Jacobi field norm `‖J(t)‖` has nonneg second
-derivative (since `y'' = -K·y` with K ≤ 0 and y ≥ 0 gives `y'' ≥ 0`). This is
-packaged as `ScalarJacobiReduction`. -/
+The clean owner-layer scalar object for Cartan-Hadamard is the squared norm
+`u(t) = ‖J(t)‖²`, which is smooth at `t = 0`. The older norm-level package is
+retained as a legacy compatibility interface. -/
+
+/-- A squared-norm reduction of a Jacobi field, carrying the smooth convexity data for
+`u(t) = ‖J(t)‖²`.
+
+This is the preferred Cartan-Hadamard scalar interface because it avoids the singular
+square-root behavior at `t = 0`. -/
+structure SquaredNormJacobiReduction where
+  /-- The squared norm function `t ↦ ‖J(t)‖²`. -/
+  normSqFn : ℝ → ℝ
+  /-- First derivative of the squared norm. -/
+  normSqDeriv : ℝ → ℝ
+  /-- Second derivative of the squared norm. -/
+  normSqSecondDeriv : ℝ → ℝ
+  /-- The squared norm vanishes at time 0. -/
+  normSqFn_zero : normSqFn 0 = 0
+  /-- The first derivative also vanishes at time 0. -/
+  normSqDeriv_zero : normSqDeriv 0 = 0
+  /-- The second derivative at 0 is strictly positive. -/
+  normSqSecondDeriv_zero_pos : 0 < normSqSecondDeriv 0
+  /-- Differentiability of the squared norm at time 0. -/
+  hasDeriv_zero : HasDerivAt normSqFn (normSqDeriv 0) 0
+  /-- Differentiability of the squared norm on `(0, ∞)`. -/
+  hasDeriv : ∀ t : ℝ, 0 < t → HasDerivAt normSqFn (normSqDeriv t) t
+  /-- Differentiability of the first derivative at 0. -/
+  hasSecondDeriv_zero : HasDerivAt normSqDeriv (normSqSecondDeriv 0) 0
+  /-- Differentiability of the first derivative on `(0, ∞)`. -/
+  hasSecondDeriv : ∀ t : ℝ, 0 < t → HasDerivAt normSqDeriv (normSqSecondDeriv t) t
+  /-- Convexity away from 0. -/
+  normSqSecondDeriv_nonneg : ∀ t : ℝ, 0 < t → 0 ≤ normSqSecondDeriv t
+
+/-- The squared Jacobi norm stays positive under the convexity reduction. -/
+theorem squaredNormJacobi_pos_of_reduction (red : SquaredNormJacobiReduction) :
+    ∀ t : ℝ, 0 < t → 0 < red.normSqFn t :=
+  positive_of_nonneg_second_deriv_of_zero_deriv_zero
+    red.normSqFn_zero red.normSqDeriv_zero red.hasDeriv_zero red.hasDeriv
+    red.hasSecondDeriv_zero red.normSqSecondDeriv_zero_pos
+    red.hasSecondDeriv red.normSqSecondDeriv_nonneg
 
 /-- A scalar reduction of a Jacobi field to its norm function, carrying the
 differentiability and ODE data needed for the convexity argument.
@@ -151,6 +186,21 @@ theorem scalarJacobi_pos_of_reduction (red : ScalarJacobiReduction) :
   positive_of_nonneg_second_deriv
     red.normFn_zero red.normDeriv_zero_pos red.hasDeriv_zero
     red.hasDeriv red.hasSecondDeriv_zero red.hasSecondDeriv red.normSecondDeriv_nonneg
+
+/-- No conjugate point at any time `b > 0` when the squared Jacobi norm is strictly positive. -/
+theorem not_conjugatePointAtZero_of_squaredNormJacobiReduction
+    {V : Type u} [NormedAddCommGroup V]
+    {J : Jacobi.JacobiOperator V}
+    (red : SquaredNormJacobiReduction)
+    (hnormSq : ∀ (data : Jacobi.InitialData V), data.value = 0 → J data ≠ 0 →
+      ∀ t : ℝ, 0 < t → red.normSqFn t ≤ ‖J data t‖ ^ 2)
+    {b : ℝ} (hb : 0 < b) :
+    ¬Jacobi.HasConjugatePointAtZero J b := by
+  intro ⟨data, hdata0, hJne, hJb⟩
+  have hpos := squaredNormJacobi_pos_of_reduction red b hb
+  have hnorm_b := hnormSq data hdata0 hJne b hb
+  have : ‖J data b‖ ^ 2 = 0 := by rw [hJb]; simp
+  nlinarith
 
 /-- No conjugate point at any time `b > 0` when the Jacobi field norm is strictly positive.
 The Jacobi field `J` with `J(0) = 0` and `J'(0) ≠ 0` satisfies `‖J(b)‖ > 0`, hence

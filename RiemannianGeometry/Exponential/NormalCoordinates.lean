@@ -228,6 +228,30 @@ theorem coordinateExpPartialHomeomorph_source_subset_coordinateExpSource
     dsimp [r, R]
     exact min_le_right _ _)
 
+/-- Source points of `coordinateExpPartialHomeomorph` are inside the `ApproximatesLinearOn`
+set U from the HasStrictFDerivAt construction. This follows from r ≤ ρ. -/
+theorem coordinateExpPartialHomeomorph_source_mem_approxSet
+    (Gamma : LeviCivita.CoordinateField.SmoothChristoffelField n)
+    (p : Position n)
+    {v : Velocity n}
+    (hv : v ∈ (coordinateExpPartialHomeomorph (n := n) Gamma p).source) :
+    v ∈ Classical.choose
+      (hasStrictFDerivAt_coordinateExp_at_zero (n := n) Gamma p).approximates_deriv_on_open_nhds := by
+  let data :=
+    Geodesic.Coordinate.localCoordinateGeodesicFlowData (n := n) Gamma 0 (baseState n p)
+  let R : ℝ := data.ε * data.r
+  let hf := hasStrictFDerivAt_coordinateExp_at_zero (n := n) Gamma p
+  let U : Set (Velocity n) := Classical.choose hf.approximates_deriv_on_open_nhds
+  let hU := Classical.choose_spec hf.approximates_deriv_on_open_nhds
+  have hU_nhds : U ∈ 𝓝 (0 : Velocity n) := hU.2.1.mem_nhds hU.1
+  let ρ : ℝ := Classical.choose (Metric.mem_nhds_iff.mp hU_nhds)
+  let hρ := Classical.choose_spec (Metric.mem_nhds_iff.mp hU_nhds)
+  have hρU : Metric.ball (0 : Velocity n) ρ ⊆ U := hρ.2
+  let r : ℝ := min ρ R
+  have hball : v ∈ Metric.ball (0 : Velocity n) r := by
+    simpa [coordinateExpPartialHomeomorph, r, R, data] using hv
+  exact hρU (Metric.ball_subset_ball (min_le_left ρ R) hball)
+
 /-- The chosen inverse-function-theorem source for `coordinateExp` is radial on `[0,1]`. -/
 theorem smul_mem_coordinateExpPartialHomeomorph_source
     (Gamma : LeviCivita.CoordinateField.SmoothChristoffelField n)

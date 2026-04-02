@@ -2,10 +2,15 @@ import HopfRinow.GeodesicExtension
 import HopfRinow.MinExistence
 import HopfRinow.Properness
 
-/-! Design-stage copy of the Hopf-Rinow bridge layer.
+/-! # Hopf-Rinow bridge layer
 
-This file records the corrected public theorem spine for the future Hopf-Rinow refactor.
-It lives only in `AGENT/HopfRinow_copy` and is not yet wired into the build. -/
+This file packages the corrected public theorem spine used by the live Hopf-Rinow assembly:
+
+- `Complete → HasGeodesicExtension`
+- `Complete → MinimizingGeodesicsExist`
+- `Complete → RiemannianProper`
+
+The false bridge `MinimizingGeodesicsExist → RiemannianProper` is intentionally absent. -/
 
 namespace HopfRinow
 

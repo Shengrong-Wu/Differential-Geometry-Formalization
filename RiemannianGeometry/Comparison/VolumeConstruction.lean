@@ -2,8 +2,10 @@ import Comparison.Rauch
 import Measure.PolarCoordinates
 import Curvature.SectionalRicci
 
-/-! The local volume-construction layer consumes the repaired Rauch input together with the polar
-density package. Bridge structures carry the genuinely missing comparison steps explicitly. -/
+/-! The local volume-construction layer consumes the repaired Rauch comparison together with the
+polar density package. Bridge structures carry the genuinely missing comparison steps explicitly,
+but the active construction route stores the honest comparison conclusion itself rather than an
+older reduction witness package. -/
 
 namespace Comparison
 
@@ -55,9 +57,100 @@ theorem logJacobianDifferentialInequality_of_localComparison
     HasLogJacobianDifferentialInequality data :=
   h
 
-/-- Construction-layer bridge for local volume comparison. Carries the Rauch → density step
-as an explicit bridge field. -/
+/-! ### Bridge-free local volume comparison from a Jacobian majorant -/
+
+/-- A bridge-free local volume comparison package. The geometric input is split into the two
+honest ingredients actually used by the proof:
+
+* a pointwise majorant for the exponential Jacobian,
+* a pointwise domination of the target model density by the induced chart density times that
+  Jacobian majorant.
+
+This removes the need for an opaque `comparisonFromRauch` bridge on the active path. -/
+structure LocalVolumeComparisonConstructionFromJacobianBound {n : ℕ} where
+  data : VolumeDensityComparisonData (n := n)
+  polar : Measure.Riemannian.HasPolarDecomposition data.exp data.vol
+  jacobianMajorant : Exponential.Coordinate.Velocity n → ℝ
+  jacobianComparison :
+    ∀ v, Measure.Riemannian.expJacobianFn data.exp v ≤ jacobianMajorant v
+  modelDensityDomination :
+    ∀ v,
+      Measure.Riemannian.inducedJacobian data.exp data.vol v * jacobianMajorant v
+        ≤ data.modelDensity v
+
+/-- If the exponential Jacobian is pointwise bounded by a majorant `Ĵ`, and the model density
+dominates `inducedJacobian * Ĵ`, then local volume density comparison follows. -/
+theorem localVolumeDensityComparison_of_jacobianMajorant
+    {n : ℕ} {data : VolumeDensityComparisonData (n := n)}
+    (hpolar : Measure.Riemannian.HasPolarDecomposition data.exp data.vol)
+    (jacobianMajorant : Exponential.Coordinate.Velocity n → ℝ)
+    (hjac :
+      ∀ v, Measure.Riemannian.expJacobianFn data.exp v ≤ jacobianMajorant v)
+    (hdom :
+      ∀ v,
+        Measure.Riemannian.inducedJacobian data.exp data.vol v * jacobianMajorant v
+          ≤ data.modelDensity v) :
+    HasLocalVolumeDensityComparison data := by
+  apply localVolumeDensityComparison_of_inducedDensity hpolar
+  intro v
+  have hinduced_nonneg :
+      0 ≤ Measure.Riemannian.inducedJacobian data.exp data.vol v := by
+    simpa [Measure.Riemannian.inducedJacobian] using
+      (Measure.Riemannian.nonneg_density data.vol (data.exp.toFun v))
+  calc
+    Measure.Riemannian.pullbackDensity data.exp data.vol v
+        = Measure.Riemannian.inducedJacobian data.exp data.vol v *
+            Measure.Riemannian.expJacobianFn data.exp v := by
+            simp [Measure.Riemannian.pullbackDensity]
+    _ ≤ Measure.Riemannian.inducedJacobian data.exp data.vol v * jacobianMajorant v := by
+          gcongr
+          exact hjac v
+    _ ≤ data.modelDensity v := hdom v
+
+theorem localVolumeDensityComparison_of_jacobianConstruction
+    {n : ℕ} (construction : LocalVolumeComparisonConstructionFromJacobianBound (n := n)) :
+    HasLocalVolumeDensityComparison construction.data :=
+  localVolumeDensityComparison_of_jacobianMajorant
+    construction.polar
+    construction.jacobianMajorant
+    construction.jacobianComparison
+    construction.modelDensityDomination
+
+theorem logJacobianDifferentialInequality_of_jacobianConstruction
+    {n : ℕ} (construction : LocalVolumeComparisonConstructionFromJacobianBound (n := n)) :
+    HasLogJacobianDifferentialInequality construction.data :=
+  logJacobianDifferentialInequality_of_localComparison
+    (localVolumeDensityComparison_of_jacobianConstruction construction)
+
+/-- **LEGACY** — Construction-layer bridge for local volume comparison using the older
+`RauchNormComparison` + `comparisonFromRauch` bridge. The active path uses
+`LocalVolumeComparisonConstructionFromJacobianBound` instead. Kept for backward compatibility. -/
 structure LocalVolumeComparisonConstruction {n : ℕ} where
+  data : VolumeDensityComparisonData (n := n)
+  polar : Measure.Riemannian.HasPolarDecomposition data.exp data.vol
+  rauchModelK : ℝ
+  rauchData : JacobiNormData
+  rauchComparison : RauchNormComparison rauchModelK rauchData
+  comparisonFromRauch :
+    RauchNormComparison rauchModelK rauchData →
+      HasLocalVolumeDensityComparison data
+
+theorem localVolumeDensityComparison_of_construction
+    {n : ℕ} (construction : LocalVolumeComparisonConstruction (n := n)) :
+    HasLocalVolumeDensityComparison construction.data :=
+  construction.comparisonFromRauch
+    construction.rauchComparison
+
+theorem logJacobianDifferentialInequality_of_construction
+    {n : ℕ} (construction : LocalVolumeComparisonConstruction (n := n)) :
+    HasLogJacobianDifferentialInequality construction.data :=
+  logJacobianDifferentialInequality_of_localComparison
+    (localVolumeDensityComparison_of_construction construction)
+
+/-- **LEGACY** — Local volume construction carrying the older `RauchInputData` reduction witness.
+This remains only as a wrapper around `LocalVolumeComparisonConstruction`. The active path uses
+`LocalVolumeComparisonConstructionFromJacobianBound` instead. -/
+structure LocalVolumeComparisonLegacyConstruction {n : ℕ} where
   data : VolumeDensityComparisonData (n := n)
   polar : Measure.Riemannian.HasPolarDecomposition data.exp data.vol
   rauchInput : RauchInputData
@@ -65,17 +158,28 @@ structure LocalVolumeComparisonConstruction {n : ℕ} where
     RauchNormComparison rauchInput.modelData.k rauchInput.data →
       HasLocalVolumeDensityComparison data
 
-theorem localVolumeDensityComparison_of_construction
-    {n : ℕ} (construction : LocalVolumeComparisonConstruction (n := n)) :
-    HasLocalVolumeDensityComparison construction.data :=
-  construction.comparisonFromRauch
-    (rauch_normComparison_of_scalarComparison construction.rauchInput)
+/-- Convert the old Rauch-input construction into the direct comparison-based construction. -/
+def LocalVolumeComparisonLegacyConstruction.toDirect
+    {n : ℕ} (construction : LocalVolumeComparisonLegacyConstruction (n := n)) :
+    LocalVolumeComparisonConstruction (n := n) where
+  data := construction.data
+  polar := construction.polar
+  rauchModelK := construction.rauchInput.modelData.k
+  rauchData := construction.rauchInput.data
+  rauchComparison := rauch_normComparison_of_scalarComparison construction.rauchInput
+  comparisonFromRauch := construction.comparisonFromRauch
 
-theorem logJacobianDifferentialInequality_of_construction
-    {n : ℕ} (construction : LocalVolumeComparisonConstruction (n := n)) :
+/-- Compatibility wrapper over the old Rauch-input local volume construction. -/
+theorem localVolumeDensityComparison_of_legacyConstruction
+    {n : ℕ} (construction : LocalVolumeComparisonLegacyConstruction (n := n)) :
+    HasLocalVolumeDensityComparison construction.data :=
+  localVolumeDensityComparison_of_construction construction.toDirect
+
+theorem logJacobianDifferentialInequality_of_legacyConstruction
+    {n : ℕ} (construction : LocalVolumeComparisonLegacyConstruction (n := n)) :
     HasLogJacobianDifferentialInequality construction.data :=
   logJacobianDifferentialInequality_of_localComparison
-    (localVolumeDensityComparison_of_construction construction)
+    (localVolumeDensityComparison_of_legacyConstruction construction)
 
 /-- Global volume-growth data for Bishop-Gromov comparison. -/
 structure VolumeGrowthData where
@@ -112,8 +216,9 @@ theorem bishopGromov_of_antitone_ratio
     HasBishopGromovMonotonicity data :=
   hmono
 
-/-- Construction-layer bridge for the Bishop-Gromov monotonicity argument. Carries the
-local → global step as an explicit bridge field. -/
+/-- **LEGACY** — Construction-layer bridge for Bishop-Gromov carrying the `monotonicityFromLocal`
+bridge field. The active path uses `BishopGromovConstructionFromDensity` (in
+`VolumeGrowthFromDensity.lean`) instead. Kept for backward compatibility. -/
 structure BishopGromovConstruction {n : ℕ} where
   localData : VolumeDensityComparisonData (n := n)
   growthData : VolumeGrowthData

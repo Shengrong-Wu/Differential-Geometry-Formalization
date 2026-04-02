@@ -2,10 +2,12 @@ import HopfRinow.GeodesicExtension
 import HopfRinow.InputConstruction
 import HopfRinow.MinExistence
 import HopfRinow.Properness
+import HopfRinow.CompleteProper
+import HopfRinow.MinimizerExistence
 
-/-! Design-stage copy of the corrected public Hopf-Rinow theorem file.
+/-! # Corrected public Hopf-Rinow theorem
 
-This copy is not in the build. It records the intended theorem spine:
+This file assembles the live corrected theorem spine:
 
 - `Complete → HasGeodesicExtension`
 - `Complete → MinimizingGeodesicsExist`
@@ -13,12 +15,13 @@ This copy is not in the build. It records the intended theorem spine:
 - `Proper → Complete`
 
 The false bridge `MinimizingGeodesicsExist → RiemannianProper` is intentionally not part of this
-copy. Future implementation files are expected to include:
+assembly. The coordinate-level assembly near the end of the file wires the finished coordinate
+properness, minimizer-existence, and direct metric geodesic-extension directions together.
+
+Relevant owner files include:
 
 - `HopfRinow/CompleteProper.lean`
 - `HopfRinow/MinimizerExistence.lean`
-- `HopfRinow/SmoothGeodesicComplete.lean`
-- `HopfRinow/MetricGeodesicBridge.lean`
 -/
 
 namespace HopfRinow
@@ -128,5 +131,25 @@ theorem hopfRinow_equivalences
       CompleteImpliesProper M ∧
       ProperImpliesComplete M :=
   ⟨h.complete_geodesic, h.complete_minimizers, h.complete_proper, h.proper_complete⟩
+
+/-! ### Coordinate-level assembly
+
+Wire the three proved directions into the full `HopfRinowTheorem` for `Position n`. -/
+
+/-- Coordinate-level Hopf-Rinow data package, assembling the three directions. -/
+def coordinate_hopfRinowData
+    {n : ℕ}
+    (Gamma : LeviCivita.CoordinateField.SmoothChristoffelField n) :
+    HopfRinowData (Exponential.Coordinate.Position n) where
+  geodesicExtension := coordinate_geodesicExtensionData_direct
+  minimizers := coordinate_minExistenceData Gamma
+  completeProper := coordinate_completeProperData Gamma
+
+/-- Coordinate-level Hopf-Rinow theorem, assembling from the data package. -/
+theorem coordinate_hopfRinowTheorem
+    {n : ℕ}
+    (Gamma : LeviCivita.CoordinateField.SmoothChristoffelField n) :
+    HopfRinowTheorem (Exponential.Coordinate.Position n) :=
+  hopfRinowTheorem_of_input (coordinate_hopfRinowData Gamma)
 
 end HopfRinow

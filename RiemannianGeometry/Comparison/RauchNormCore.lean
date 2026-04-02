@@ -106,10 +106,74 @@ theorem hasDerivAt_jacobi_normSq
   rw [heq1, heq2]
   exact hsum
 
+/-- If `J'' = -A(t)J`, then the velocity pairing `2⟨J,J'⟩` has derivative
+`2(‖J'‖² - ⟨A(t)J,J⟩)`. This is the concrete second-derivative formula for
+`u = ‖J‖²`. -/
+theorem hasDerivAt_jacobi_velocityPairing
+    (sys : Jacobi.CoordinateJacobiSystem n)
+    {J J' : ℝ → Fin n → ℝ}
+    {t : ℝ}
+    (hJ : ∀ i : Fin n, HasDerivAt (fun s => J s i) (J' t i) t)
+    (hJ' : ∀ i : Fin n,
+      HasDerivAt (fun s => J' s i) (-(Matrix.mulVec (sys.A t) (J t)) i) t) :
+    HasDerivAt (fun s => 2 * vecInner (J s) (J' s))
+      (2 * (vecNormSq (J' t) - matrixQuadForm (sys.A t) (J t))) t := by
+  have hsum :
+      HasDerivAt
+        (fun s => ∑ i : Fin n, 2 * J s i * J' s i)
+        (∑ i : Fin n, (2 * J' t i * J' t i + 2 * J t i * (-(Matrix.mulVec (sys.A t) (J t)) i))) t := by
+    have hterm :
+        ∀ i : Fin n,
+          HasDerivAt (fun s => 2 * J s i * J' s i)
+            (2 * J' t i * J' t i + 2 * J t i * (-(Matrix.mulVec (sys.A t) (J t)) i)) t := by
+      intro i
+      have hmul :
+          HasDerivAt (fun s => J s i * J' s i)
+            (J' t i * J' t i + J t i * (-(Matrix.mulVec (sys.A t) (J t)) i)) t :=
+        (hJ i).mul (hJ' i)
+      simpa [two_mul, mul_add, add_comm, add_left_comm, add_assoc,
+        mul_assoc, mul_left_comm, mul_comm] using hmul.const_mul (2 : ℝ)
+    exact HasDerivAt.fun_sum (fun i _ => hterm i)
+  have heq_fun :
+      (fun s => 2 * vecInner (J s) (J' s)) = fun s => ∑ i : Fin n, 2 * J s i * J' s i := by
+    funext s
+    unfold vecInner
+    rw [Finset.mul_sum]
+    refine Finset.sum_congr rfl ?_
+    intro i hi
+    ring
+  have heq_val :
+      2 * (vecNormSq (J' t) - matrixQuadForm (sys.A t) (J t)) =
+        ∑ i : Fin n, (2 * J' t i * J' t i + 2 * J t i * (-(Matrix.mulVec (sys.A t) (J t)) i)) := by
+    calc
+      2 * (vecNormSq (J' t) - matrixQuadForm (sys.A t) (J t))
+          = 2 * ∑ i : Fin n, (J' t i ^ 2 - (Matrix.mulVec (sys.A t) (J t)) i * J t i) := by
+              simp [vecNormSq, matrixQuadForm, vecInner, Finset.sum_sub_distrib]
+      _ = ∑ i : Fin n, 2 * (J' t i ^ 2 - (Matrix.mulVec (sys.A t) (J t)) i * J t i) := by
+            rw [Finset.mul_sum]
+      _ = ∑ i : Fin n, (2 * J' t i * J' t i + 2 * J t i * (-(Matrix.mulVec (sys.A t) (J t)) i)) := by
+            refine Finset.sum_congr rfl ?_
+            intro i hi
+            ring
+  rw [heq_fun, heq_val]
+  exact hsum
+
 /-- The Rayleigh quotient upper bound: ⟨A(t)ξ, ξ⟩ ≤ k·‖ξ‖² for all ξ. -/
 def HasRayleighUpperBound
     (A : ℝ → Matrix (Fin n) (Fin n) ℝ) (k : ℝ) : Prop :=
   ∀ t : ℝ, ∀ v : Fin n → ℝ, matrixQuadForm (A t) v ≤ k * vecNormSq v
+
+/-- The Rayleigh quotient upper bound restricted to a specified time set. -/
+def HasRayleighUpperBoundOn
+    (A : ℝ → Matrix (Fin n) (Fin n) ℝ) (s : Set ℝ) (k : ℝ) : Prop :=
+  ∀ ⦃t : ℝ⦄, t ∈ s → ∀ v : Fin n → ℝ, matrixQuadForm (A t) v ≤ k * vecNormSq v
+
+theorem HasRayleighUpperBound.on
+    {A : ℝ → Matrix (Fin n) (Fin n) ℝ} {k : ℝ}
+    (h : HasRayleighUpperBound A k) (s : Set ℝ) :
+    HasRayleighUpperBoundOn A s k := by
+  intro t ht v
+  exact h t v
 
 /-- Under the Rayleigh upper bound, the squared norm of a Jacobi field satisfies
 `u''(t) ≥ 2(‖J'‖² - k·‖J‖²)`.

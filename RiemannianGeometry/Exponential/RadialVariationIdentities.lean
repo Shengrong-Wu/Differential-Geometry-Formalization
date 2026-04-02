@@ -701,4 +701,58 @@ theorem geodesicFamily_velocity_eq_fderiv_radial
     _ = (fderiv ℝ (coordinateExp (n := n) Gamma p) (t • v)) v := by
           exact hline_fderiv.derivWithin hUnique
 
+/-! ### Christoffel symmetry (torsion-free property)
+
+The Levi-Civita connection has symmetric Christoffel symbols: Γ^k_{ij} = Γ^k_{ji}.
+This means the "connection matrix of V applied to S" equals "connection matrix of S applied to V":
+`Σ_k Γ^m_{kj} V_k S_j = Σ_k Γ^m_{kj} S_k V_j`.
+
+This is the coordinate expression of the torsion-free property and is needed for the
+Gauss lemma derivative formula. -/
+
+/-- The connection matrix contracted with a vector. `(Γ(x,V))_{ij} = Σ_k Γ^i_{kj}(x) V_k`. -/
+private noncomputable def connectionMatrixOfVector'
+    (Gamma : LeviCivita.CoordinateField.SmoothChristoffelField n)
+    (x : Position n) (v : Velocity n) : Matrix (Fin n) (Fin n) ℝ :=
+  fun i j => ∑ k : Fin n, Gamma i k j x * v k
+
+/-- **Christoffel symmetry / torsion-free property**: the connection matrix of V applied
+to S equals the connection matrix of S applied to V.
+
+In formulas: `Γ(x,V)·S = Γ(x,S)·V`, i.e.,
+`Σ_j (Σ_k Γ^m_{kj} V_k) S_j = Σ_j (Σ_k Γ^m_{kj} S_k) V_j`.
+
+This uses the lower-index symmetry `Γ^m_{kj} = Γ^m_{jk}` of the Levi-Civita connection. -/
+theorem connectionMatrix_mulVec_symm
+    (data : LocalRiemannianData n)
+    (x : Position n) (V S : Velocity n) :
+    Matrix.mulVec (connectionMatrixOfVector' (n := n) data.Gamma x V) S =
+    Matrix.mulVec (connectionMatrixOfVector' (n := n) data.Gamma x S) V := by
+  ext m
+  simp only [Matrix.mulVec, dotProduct, connectionMatrixOfVector']
+  -- LHS: Σ_j (Σ_k Γ^m_{kj} V_k) S_j
+  -- RHS: Σ_j (Σ_k Γ^m_{kj} S_k) V_j
+  -- LHS_m = Σ_j (Σ_k Γ^m_{kj} V_k) S_j = Σ_{j,k} Γ^m_{kj} V_k S_j
+  -- RHS_m = Σ_j (Σ_k Γ^m_{kj} S_k) V_j = Σ_{j,k} Γ^m_{kj} S_k V_j
+  -- These are equal because after Christoffel symmetry and index renaming:
+  -- LHS = Σ_{a,b} Γ^m_{ab} V_a S_b = Σ_{a,b} Γ^m_{ba} V_a S_b (by symm)
+  --     = Σ_{a,b} Γ^m_{ab} V_b S_a (renaming a↔b) = RHS
+  have hGamma_symm : ∀ a b : Fin n,
+      data.Gamma.toFun m a b x = data.Gamma.toFun m b a x :=
+    fun a b => LeviCivita.CoordinateField.leviCivitaChristoffelField_lower_symm
+      data.gInvSmooth data.gSmooth data.symm x m a b
+  show (∑ j, (∑ k, data.Gamma.toFun m k j x * V k) * S j) =
+    (∑ j, (∑ k, data.Gamma.toFun m k j x * S k) * V j)
+  -- Expand both to Σ_{j,k} and show pointwise equality after Christoffel symmetry
+  -- LHS after expanding: Σ_{j,k} Γ_{kj} * V_k * S_j
+  -- RHS after expanding: Σ_{j,k} Γ_{kj} * S_k * V_j
+  -- Swap (j,k) in RHS: Σ_{j,k} Γ_{jk} * S_j * V_k = Σ_{j,k} Γ_{kj} * S_j * V_k (by symm)
+  --                    = Σ_{j,k} Γ_{kj} * V_k * S_j (by comm of ℝ mult) = LHS ✓
+  -- So both sides are equal.
+  simp only [Finset.sum_mul, Finset.mul_sum]
+  rw [Finset.sum_comm (f := fun j k => data.Gamma.toFun m k j x * S k * V j)]
+  apply Finset.sum_congr rfl; intro a _
+  apply Finset.sum_congr rfl; intro b _
+  rw [hGamma_symm a b]; ring
+
 end Exponential.Coordinate

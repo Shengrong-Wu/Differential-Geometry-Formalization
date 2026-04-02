@@ -27,15 +27,34 @@ def IsGeodesicLineWithSpeed
     (γ : ℝ → M) (c : ℝ) : Prop :=
   IsGeodesicOnWithSpeed M γ c Set.univ
 
-/-- A geodesic segment on `[a,b]` extends to a global geodesic line with the same speed. -/
+/-- A global constant-speed local metric geodesic line. -/
+def IsLocalGeodesicLineWithSpeed
+    (M : Type u) [PseudoMetricSpace M]
+    (γ : ℝ → M) (c : ℝ) : Prop :=
+  ∀ t : ℝ, ∃ ε > 0, IsGeodesicOnWithSpeed M γ c (Set.Icc (t - ε) (t + ε))
+
+/-- A global metric line is, in particular, a global local metric line. -/
+theorem IsGeodesicLineWithSpeed.isLocal
+    {M : Type u} [PseudoMetricSpace M]
+    {γ : ℝ → M} {c : ℝ}
+    (hγ : IsGeodesicLineWithSpeed M γ c) :
+    IsLocalGeodesicLineWithSpeed M γ c := by
+  intro t
+  refine ⟨1, by positivity, ?_⟩
+  refine ⟨hγ.1, ?_⟩
+  intro t₁ t₂ _ _
+  exact hγ.2 (by simp) (by simp)
+
+/-- A geodesic segment on `[a,b]` extends to a global local metric geodesic line
+with the same speed. -/
 def GeodesicExtendsToAllTime
     (M : Type u) [PseudoMetricSpace M]
     (γ : ℝ → M) (c a b : ℝ) : Prop :=
-  ∃ γ' : ℝ → M, IsGeodesicLineWithSpeed M γ' c ∧ Set.EqOn γ' γ (Set.Icc a b)
+  ∃ γ' : ℝ → M, IsLocalGeodesicLineWithSpeed M γ' c ∧ Set.EqOn γ' γ (Set.Icc a b)
 
 /-- Package-level geodesic completeness stated as extension of metric geodesic segments. -/
 def HasGeodesicExtension (M : Type u) [PseudoMetricSpace M] : Prop :=
-  ∀ ⦃a b c : ℝ⦄, a ≤ b → 0 ≤ c → ∀ γ : ℝ → M,
+  ∀ ⦃a b c : ℝ⦄, a < b → 0 ≤ c → ∀ γ : ℝ → M,
     IsGeodesicOnWithSpeed M γ c (Set.Icc a b) →
     GeodesicExtendsToAllTime M γ c a b
 
@@ -62,23 +81,24 @@ theorem hasGeodesicExtension_of_geodesicallyComplete
 noncomputable def someGeodesicExtension
     {M : Type u} [PseudoMetricSpace M]
     (h : HasGeodesicExtension M)
-    {a b c : ℝ} (hab : a ≤ b) (hc : 0 ≤ c) (γ : ℝ → M)
+    {a b c : ℝ} (hab : a < b) (hc : 0 ≤ c) (γ : ℝ → M)
     (hγ : IsGeodesicOnWithSpeed M γ c (Set.Icc a b)) :
     ℝ → M :=
   Classical.choose (h hab hc γ hγ)
 
-theorem someGeodesicExtension_isGeodesicLineWithSpeed
+/-- The chosen extension is a global local metric geodesic line. -/
+theorem someGeodesicExtension_isLocalGeodesicLineWithSpeed
     {M : Type u} [PseudoMetricSpace M]
     (h : HasGeodesicExtension M)
-    {a b c : ℝ} (hab : a ≤ b) (hc : 0 ≤ c) (γ : ℝ → M)
+    {a b c : ℝ} (hab : a < b) (hc : 0 ≤ c) (γ : ℝ → M)
     (hγ : IsGeodesicOnWithSpeed M γ c (Set.Icc a b)) :
-    IsGeodesicLineWithSpeed M (someGeodesicExtension h hab hc γ hγ) c :=
+    IsLocalGeodesicLineWithSpeed M (someGeodesicExtension h hab hc γ hγ) c :=
   (Classical.choose_spec (h hab hc γ hγ)).1
 
 theorem someGeodesicExtension_eqOn
     {M : Type u} [PseudoMetricSpace M]
     (h : HasGeodesicExtension M)
-    {a b c : ℝ} (hab : a ≤ b) (hc : 0 ≤ c) (γ : ℝ → M)
+    {a b c : ℝ} (hab : a < b) (hc : 0 ≤ c) (γ : ℝ → M)
     (hγ : IsGeodesicOnWithSpeed M γ c (Set.Icc a b)) :
     Set.EqOn (someGeodesicExtension h hab hc γ hγ) γ (Set.Icc a b) :=
   (Classical.choose_spec (h hab hc γ hγ)).2

@@ -1,5 +1,7 @@
 import HopfRinow.GeodesicExtension
 import HopfRinow.InputConstruction
+import HopfRinow.CoordinateMetricDistance
+import HopfRinow.MetricLocalMinimizer
 import HopfRinow.LengthCompactness
 import HopfRinow.MinExistence
 import HopfRinow.Properness

@@ -69,6 +69,10 @@ def IsCoordinateGeodesicAt
 def timeRescaleStateCurve (a : ℝ) (gamma : ℝ → State n) : ℝ → State n :=
   fun t => (statePosition n (gamma (a * t)), a • stateVelocity n (gamma (a * t)))
 
+/-- Translate a state curve in time by `c`. -/
+def timeTranslateStateCurve (c : ℝ) (gamma : ℝ → State n) : ℝ → State n :=
+  fun t => gamma (t - c)
+
 @[simp] theorem statePosition_timeRescaleStateCurve
     (a : ℝ) (gamma : ℝ → State n) (t : ℝ) :
     statePosition n (timeRescaleStateCurve (n := n) a gamma t) =
@@ -212,5 +216,32 @@ theorem isCoordinateGeodesicOn_timeRescale_interval
         HasDerivWithinAt (fun _ : ℝ => a) 0 (Set.Icc (-ε) ε) t :=
       hasDerivWithinAt_const t (Set.Icc (-ε) ε) a
     simpa [timeRescaleStateCurve, smul_smul, pow_two] using HasDerivWithinAt.smul hconst hcomp
+
+theorem isCoordinateGeodesicOn_timeTranslate
+    {Gamma : ChristoffelField n} {gamma : ℝ → State n} {a b c : ℝ}
+    (hgamma : IsCoordinateGeodesicOn Gamma gamma (Set.Icc a b)) :
+    IsCoordinateGeodesicOn Gamma
+      (timeTranslateStateCurve (n := n) c gamma)
+      (Set.Icc (a + c) (b + c)) := by
+  intro t ht
+  have hmap :
+      MapsTo (fun s : ℝ => s - c) (Set.Icc (a + c) (b + c)) (Set.Icc a b) := by
+    intro s hs
+    simpa [sub_eq_add_neg, add_comm, add_left_comm, add_assoc] using hs
+  have hinner :
+      HasDerivWithinAt (fun s : ℝ => s - c) 1 (Set.Icc (a + c) (b + c)) t := by
+    have hinner_id :
+        HasDerivWithinAt (fun s : ℝ => s) 1 (Set.Icc (a + c) (b + c)) t :=
+      (hasDerivAt_id t).hasDerivWithinAt
+    have hconst :
+        HasDerivWithinAt (fun _ : ℝ => -c) 0 (Set.Icc (a + c) (b + c)) t :=
+      hasDerivWithinAt_const t (Set.Icc (a + c) (b + c)) (-c)
+    simpa [sub_eq_add_neg, add_comm, add_left_comm, add_assoc] using hinner_id.add hconst
+  have houter :
+      HasDerivWithinAt gamma ((geodesicVectorField Gamma) (t - c) (gamma (t - c)))
+        (Set.Icc a b) (t - c) :=
+    hgamma (t - c) (hmap ht)
+  simpa [timeTranslateStateCurve, geodesicVectorField] using
+    (houter.hasFDerivWithinAt.comp_hasDerivWithinAt (x := t) hinner hmap)
 
 end Geodesic.Coordinate

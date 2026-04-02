@@ -58,6 +58,18 @@ def SatisfiesModelNormBound
     (k : ℝ) (jacobiNorm model : ℝ → ℝ) : Prop :=
   SatisfiesModelNormBoundOn (modelPosDomain k) jacobiNorm model
 
+/-- Pointwise lower comparison on a fixed domain between the scalar model and a geometric Jacobi
+norm. This is the honest orientation produced by supersolution-side scalar comparison. -/
+def SatisfiesModelNormLowerBoundOn
+    (s : Set ℝ) (jacobiNorm model : ℝ → ℝ) : Prop :=
+  ∀ ⦃t : ℝ⦄, t ∈ s → model t ≤ jacobiNorm t
+
+/-- Pointwise lower comparison between the scalar model and a geometric Jacobi norm on the first
+positive model interval. -/
+def SatisfiesModelNormLowerBound
+    (k : ℝ) (jacobiNorm model : ℝ → ℝ) : Prop :=
+  SatisfiesModelNormLowerBoundOn (modelPosDomain k) jacobiNorm model
+
 @[simp] theorem sn_of_zero (r : ℝ) :
     sn 0 r = r := by
   simp [sn]

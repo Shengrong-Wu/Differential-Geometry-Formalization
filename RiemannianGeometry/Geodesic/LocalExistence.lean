@@ -10,6 +10,7 @@ spray-owned radial domain and the coordinate exponential map. -/
 namespace Geodesic.Coordinate
 
 open Set ODE
+open scoped Topology
 
 variable {n : ℕ}
 
@@ -409,5 +410,79 @@ theorem localCoordinateGeodesic_mem_closedBall
   simpa [localCoordinateGeodesic, localCoordinateGeodesicDomain] using
     localCoordinateGeodesicFlow_mem_closedBall (n := n) Gamma t₀ z₀ z₀
       (self_mem_localCoordinateGeodesicFlowSource (n := n) Gamma t₀ z₀) ht
+
+/-- Uniform local coordinate-geodesic existence on a compact state set at time `0`. -/
+theorem exists_uniform_coordinateGeodesicOn_zero_of_isCompact
+    (Gamma : LeviCivita.CoordinateField.SmoothChristoffelField n)
+    {K : Set (State n)} (hK : IsCompact K) :
+    ∃ ε > 0, ∀ z ∈ K, ∃ γ : ℝ → State n,
+      γ 0 = z ∧
+      IsCoordinateGeodesicOn (christoffelFieldOfSmooth Gamma) γ (Set.Icc (-ε) ε) := by
+  by_cases hKe : K = ∅
+  · refine ⟨1, zero_lt_one, ?_⟩
+    intro z hz
+    exact (hKe.symm ▸ hz).elim
+  · have hKne : K.Nonempty := Set.nonempty_iff_ne_empty.mpr hKe
+    let U : State n → Set (State n) := fun z =>
+      Metric.ball z (localCoordinateGeodesicFlowData (n := n) Gamma 0 z).r
+    have hU : ∀ z ∈ K, U z ∈ 𝓝 z := by
+      intro z hz
+      exact Metric.ball_mem_nhds z (localCoordinateGeodesicFlowData (n := n) Gamma 0 z).hr
+    obtain ⟨t, htK, hcover⟩ := hK.elim_nhds_subcover U hU
+    obtain ⟨z0, hz0K⟩ := hKne
+    have htnonempty : t.Nonempty := by
+      rcases mem_iUnion₂.mp (hcover hz0K) with ⟨x, hxt, hxU⟩
+      exact ⟨x, hxt⟩
+    let ε : ℝ :=
+      t.inf' htnonempty (fun z => (localCoordinateGeodesicFlowData (n := n) Gamma 0 z).ε)
+    have hεpos : 0 < ε := by
+      refine (Finset.lt_inf'_iff (s := t) (H := htnonempty) (f := fun z =>
+        (localCoordinateGeodesicFlowData (n := n) Gamma 0 z).ε)).2 ?_
+      intro z hz
+      exact (localCoordinateGeodesicFlowData (n := n) Gamma 0 z).hε
+    refine ⟨ε, hεpos, ?_⟩
+    intro z hzK
+    rcases mem_iUnion₂.mp (hcover hzK) with ⟨x, hxt, hxU⟩
+    let data := localCoordinateGeodesicFlowData (n := n) Gamma 0 x
+    have hzsource : z ∈ localCoordinateGeodesicFlowSource (n := n) Gamma 0 x := by
+      have hzx : dist z x < data.r := hxU
+      exact Metric.mem_closedBall.mpr (le_of_lt hzx)
+    have hεle : ε ≤ data.ε := by
+      exact Finset.inf'_le (s := t) (f := fun z =>
+        (localCoordinateGeodesicFlowData (n := n) Gamma 0 z).ε) hxt
+    have hgeod_big :
+        IsCoordinateGeodesicOn (christoffelFieldOfSmooth Gamma)
+          (fun s => localCoordinateGeodesicFlow (n := n) Gamma 0 x (z, s))
+          (Set.Icc (-data.ε) data.ε) := by
+      simpa [localCoordinateGeodesicFlowTimeDomain, data] using
+        localCoordinateGeodesicFlow_isGeodesic (n := n) Gamma 0 z x hzsource
+    have hsubset : Set.Icc (-ε) ε ⊆ Set.Icc (-data.ε) data.ε := by
+      intro s hs
+      constructor
+      · have hneg : -data.ε ≤ -ε := by linarith
+        exact le_trans hneg hs.1
+      · exact le_trans hs.2 hεle
+    refine ⟨fun s => localCoordinateGeodesicFlow (n := n) Gamma 0 x (z, s), ?_, ?_⟩
+    · simpa [data] using localCoordinateGeodesicFlow_initial (n := n) Gamma 0 z x hzsource
+    · exact hgeod_big.mono hsubset
+
+/-- Uniform local coordinate-geodesic existence on a compact state set, transported to any center
+time by autonomy of the spray. -/
+theorem exists_uniform_coordinateGeodesicOn_of_isCompact
+    (Gamma : LeviCivita.CoordinateField.SmoothChristoffelField n)
+    {K : Set (State n)} (hK : IsCompact K)
+    (t₀ : ℝ) :
+    ∃ ε > 0, ∀ z ∈ K, ∃ γ : ℝ → State n,
+      γ t₀ = z ∧
+      IsCoordinateGeodesicOn (christoffelFieldOfSmooth Gamma) γ (Set.Icc (t₀ - ε) (t₀ + ε)) := by
+  obtain ⟨ε, hε, hloc⟩ :=
+    exists_uniform_coordinateGeodesicOn_zero_of_isCompact (n := n) Gamma hK
+  refine ⟨ε, hε, ?_⟩
+  intro z hzK
+  obtain ⟨γ, hγ0, hγ⟩ := hloc z hzK
+  refine ⟨timeTranslateStateCurve (n := n) t₀ γ, ?_, ?_⟩
+  · simpa [timeTranslateStateCurve] using hγ0
+  · simpa [timeTranslateStateCurve, sub_eq_add_neg, add_comm, add_left_comm, add_assoc] using
+      isCoordinateGeodesicOn_timeTranslate (n := n) (c := t₀) (a := -ε) (b := ε) hγ
 
 end Geodesic.Coordinate

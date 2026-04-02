@@ -52,11 +52,25 @@ def HasScalarJacobiComparison
     (data : ScalarJacobiComparisonData) : Prop :=
   SatisfiesModelNormBound data.modelData.k data.jacobiNorm data.modelNorm
 
+/-- Supersolution-side scalar comparison conclusion: the model lies below the geometric norm on the
+honest comparison domain. This is kept separate from `HasScalarJacobiComparison` because it has the
+opposite orientation. -/
+def HasScalarJacobiLowerComparison
+    (data : ScalarJacobiComparisonData) : Prop :=
+  SatisfiesModelNormLowerBound data.modelData.k data.jacobiNorm data.modelNorm
+
 theorem hasScalarJacobiComparison_of_pointwise
     {data : ScalarJacobiComparisonData}
     (h :
       ∀ ⦃t : ℝ⦄, t ∈ data.comparisonDomain → data.jacobiNorm t ≤ data.modelNorm t) :
     HasScalarJacobiComparison data :=
+  h
+
+theorem hasScalarJacobiLowerComparison_of_pointwise
+    {data : ScalarJacobiComparisonData}
+    (h :
+      ∀ ⦃t : ℝ⦄, t ∈ data.comparisonDomain → data.modelNorm t ≤ data.jacobiNorm t) :
+    HasScalarJacobiLowerComparison data :=
   h
 
 /-- Package-level scalar comparison bridge from the canonical Sturm owner theorem. The Wronskian
@@ -78,5 +92,25 @@ theorem hasScalarJacobiComparison_of_subsolution
   intro t ht
   rw [hmodel]
   exact scalarComparison_of_subsolution hy0 hy1 hy hy2ineq ht
+
+/-- Package-level supersolution-side scalar bridge from the repaired Sturm owner theorem. This
+keeps the lower-comparison orientation explicit instead of forcing it through the upper-bound
+interface used by the active Rauch/Jacobian path. -/
+theorem hasScalarJacobiLowerComparison_of_supersolution
+    {data : ScalarJacobiComparisonData}
+    (hmodel : data.modelNorm = sn data.modelData.k)
+    (hy0 : data.jacobiNorm 0 = 0)
+    (hy1 : deriv data.jacobiNorm 0 = 1)
+    (hy :
+      ∀ ⦃t : ℝ⦄, t ∈ data.comparisonDomain →
+        HasDerivAt data.jacobiNorm (deriv data.jacobiNorm t) t)
+    (hy2ineq :
+      ∀ ⦃t : ℝ⦄, t ∈ data.comparisonDomain →
+        HasDerivAt (deriv data.jacobiNorm) (deriv (deriv data.jacobiNorm) t) t ∧
+          0 ≤ deriv (deriv data.jacobiNorm) t + data.modelData.k * data.jacobiNorm t) :
+    HasScalarJacobiLowerComparison data := by
+  intro t ht
+  rw [hmodel]
+  exact scalarComparison_of_supersolution hy0 hy1 hy hy2ineq ht
 
 end Comparison

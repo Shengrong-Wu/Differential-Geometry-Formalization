@@ -139,6 +139,142 @@ theorem HasNormalCoordinateKinematics.coordinateExp_normalCoordinateCurve
         (normalCoordinateCurve (n := n) Gamma p γ t) = γ t :=
   coordinateExp_normalCoordinateCurve_eqOn (n := n) Gamma p γ hkin.liesInOn ht
 
+theorem HasNormalCoordinateKinematics.restrict
+    {Gamma : LeviCivita.CoordinateField.SmoothChristoffelField n}
+    {p : Exponential.Coordinate.Position n}
+    {γ : ℝ → Exponential.Coordinate.Position n}
+    {Tγ Uγ : ℝ → Exponential.Coordinate.Velocity n}
+    {a b : ℝ}
+    (hkin : HasNormalCoordinateKinematics (n := n) Gamma p γ Tγ Uγ a b)
+    {c d : ℝ}
+    (hac : a ≤ c)
+    (hcd : c ≤ d)
+    (hdb : d ≤ b) :
+    HasNormalCoordinateKinematics (n := n) Gamma p γ Tγ Uγ c d := by
+  have hab : a ≤ b := le_trans hac (le_trans hcd hdb)
+  have hsub_Icc : Set.Icc c d ⊆ Set.Icc a b := by
+    intro t ht
+    constructor
+    · exact le_trans hac ht.1
+    · exact le_trans ht.2 hdb
+  have hsub_uIcc : Set.uIcc c d ⊆ Set.uIcc a b := by
+    simpa [Set.uIcc_of_le hcd, Set.uIcc_of_le hab] using hsub_Icc
+  have hcurve_restrict :
+      HasCoordinateVelocityOn (n := n) γ Tγ (Set.Icc c d) := by
+    intro t ht
+    exact (hkin.curveVelocity t (hsub_Icc ht)).mono hsub_Icc
+  have hnormal_restrict :
+      HasCoordinateVelocityOn (n := n)
+        (normalCoordinateCurve (n := n) Gamma p γ) Uγ (Set.Icc c d) := by
+    intro t ht
+    exact (hkin.normalVelocity t (hsub_Icc ht)).mono hsub_Icc
+  have hnormal_cont :
+      ContinuousOn (normalCoordinateCurve (n := n) Gamma p γ) (Set.Icc c d) :=
+    HasDerivWithinAt.continuousOn hnormal_restrict
+  have hderiv_at :
+      ∀ t ∈ Set.Ioo c d,
+        HasDerivAt (normalCoordinateCurve (n := n) Gamma p γ) (Uγ t) t := by
+    intro t ht
+    exact (hnormal_restrict t ⟨le_of_lt ht.1, le_of_lt ht.2⟩).hasDerivAt
+      (Icc_mem_nhds ht.1 ht.2)
+  refine
+    { liesInOn := ?_
+      curveVelocity := hcurve_restrict
+      normalVelocity := hnormal_restrict
+      displacement := ?_ }
+  · intro t ht
+    exact hkin.liesInOn (hsub_Icc ht)
+  · refine
+      { integrable := hkin.displacement.integrable.mono_set hsub_uIcc
+        integral_eq := ?_ }
+    exact intervalIntegral.integral_eq_sub_of_hasDerivAt_of_le hcd hnormal_cont hderiv_at
+      (hkin.displacement.integrable.mono_set hsub_uIcc)
+
+theorem HasNormalCoordinateKinematics.rescaleToUnitInterval
+    {Gamma : LeviCivita.CoordinateField.SmoothChristoffelField n}
+    {p : Exponential.Coordinate.Position n}
+    {γ : ℝ → Exponential.Coordinate.Position n}
+    {Tγ Uγ : ℝ → Exponential.Coordinate.Velocity n}
+    {b : ℝ}
+    (hkin : HasNormalCoordinateKinematics (n := n) Gamma p γ Tγ Uγ 0 b)
+    (hb : 0 ≤ b) :
+    HasNormalCoordinateKinematics (n := n) Gamma p
+      (fun s => γ (b * s))
+      (fun s => b • Tγ (b * s))
+      (fun s => b • Uγ (b * s))
+      0 1 := by
+  have hmaps : Set.MapsTo (fun s : ℝ => b * s) (Set.Icc (0 : ℝ) 1) (Set.Icc (0 : ℝ) b) := by
+    intro s hs
+    constructor
+    · exact mul_nonneg hb hs.1
+    · have hmul : b * s ≤ b * 1 := mul_le_mul_of_nonneg_left hs.2 hb
+      simpa using hmul
+  have hcurve_reparam :
+      HasCoordinateVelocityOn (n := n)
+        (fun s => γ (b * s))
+        (fun s => b • Tγ (b * s))
+        (Set.Icc (0 : ℝ) 1) := by
+    intro s hs
+    have hinner :
+        HasDerivWithinAt (fun τ : ℝ => b * τ) b (Set.Icc (0 : ℝ) 1) s := by
+      simpa [smul_eq_mul, mul_comm] using (((hasDerivAt_id s).smul_const b).hasDerivWithinAt)
+    have houter :
+        HasDerivWithinAt γ (Tγ (b * s)) (Set.Icc (0 : ℝ) b) (b * s) :=
+      hkin.curveVelocity (b * s) (hmaps hs)
+    simpa [Function.comp] using
+      (houter.hasFDerivWithinAt.comp_hasDerivWithinAt (x := s) hinner hmaps)
+  have hnormal_reparam :
+      HasCoordinateVelocityOn (n := n)
+        (normalCoordinateCurve (n := n) Gamma p (fun s => γ (b * s)))
+        (fun s => b • Uγ (b * s))
+        (Set.Icc (0 : ℝ) 1) := by
+    intro s hs
+    have hinner :
+        HasDerivWithinAt (fun τ : ℝ => b * τ) b (Set.Icc (0 : ℝ) 1) s := by
+      simpa [smul_eq_mul, mul_comm] using (((hasDerivAt_id s).smul_const b).hasDerivWithinAt)
+    have houter :
+        HasDerivWithinAt (normalCoordinateCurve (n := n) Gamma p γ)
+          (Uγ (b * s)) (Set.Icc (0 : ℝ) b) (b * s) :=
+      hkin.normalVelocity (b * s) (hmaps hs)
+    simpa [normalCoordinateCurve, Function.comp] using
+      (houter.hasFDerivWithinAt.comp_hasDerivWithinAt (x := s) hinner hmaps)
+  have hdisp_int :
+      IntervalIntegrable (fun s => b • Uγ (b * s)) MeasureTheory.volume 0 1 := by
+    by_cases hb0 : b = 0
+    · simpa [hb0] using
+        (intervalIntegrable_zero : IntervalIntegrable
+          (fun _ : ℝ => (0 : Exponential.Coordinate.Velocity n))
+          MeasureTheory.volume 0 1)
+    · have hcomp :
+          IntervalIntegrable (fun s => Uγ (b * s)) MeasureTheory.volume (0 / b) (b / b) :=
+        hkin.displacement.integrable.comp_mul_left
+      simpa [hb0, zero_div, div_self, zero_mul, one_mul] using hcomp.smul b
+  refine
+    { liesInOn := ?_
+      curveVelocity := hcurve_reparam
+      normalVelocity := hnormal_reparam
+      displacement := ?_ }
+  · intro s hs
+    exact hkin.liesInOn (hmaps hs)
+  · refine
+      { integrable := hdisp_int
+        integral_eq := ?_ }
+    calc
+      ∫ s in (0 : ℝ)..1, b • Uγ (b * s)
+        = b • ∫ s in (0 : ℝ)..1, Uγ (b * s) := by
+            rw [intervalIntegral.integral_smul]
+      _ = ∫ s in (0 : ℝ)..b, Uγ s := by
+            simpa [zero_mul, one_mul] using
+              (intervalIntegral.smul_integral_comp_mul_left
+                (f := fun s : ℝ => Uγ s)
+                (a := (0 : ℝ)) (b := (1 : ℝ)) (c := b))
+      _ = Exponential.Coordinate.normalCoordinates (n := n) Gamma p (γ b) -
+            Exponential.Coordinate.normalCoordinates (n := n) Gamma p (γ 0) :=
+          by simpa [zero_mul, one_mul] using hkin.displacement.integral_eq
+      _ = Exponential.Coordinate.normalCoordinates (n := n) Gamma p (γ (b * 1)) -
+            Exponential.Coordinate.normalCoordinates (n := n) Gamma p (γ (b * 0)) := by
+          simp [zero_mul, one_mul]
+
 theorem curveVelocity_eq_dexpDir_apply_normalVelocity
     (Gamma : LeviCivita.CoordinateField.SmoothChristoffelField n)
     (p : Exponential.Coordinate.Position n)

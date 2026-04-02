@@ -26,6 +26,19 @@ theorem hasDerivWithinAt_Ici_of_hasDerivWithinAt_Icc
     HasDerivWithinAt φ y (Ici t) t :=
   (h.hasDerivAt (Icc_mem_nhds hat htb)).hasDerivWithinAt
 
+/-- Convert `HasDerivWithinAt` on `Icc a b` at the left endpoint `a` to `HasDerivWithinAt` on
+`Ici a`. Near `a`, the sets `Icc a b` and `Ici a` agree as long as `a < b`. -/
+theorem hasDerivWithinAt_Ici_of_hasDerivWithinAt_Icc_left
+    {φ : ℝ → E} {y : E} {a b : ℝ}
+    (h : HasDerivWithinAt φ y (Icc a b) a)
+    (hab : a < b) :
+    HasDerivWithinAt φ y (Ici a) a := by
+  exact h.congr_set <|
+    Eventually.set_eq <|
+      Filter.eventually_of_mem (Iio_mem_nhds hab) (fun x hx => by
+        simp only [mem_Icc, mem_Ici]
+        exact ⟨fun hmem => hmem.1, fun hmem => ⟨hmem, le_of_lt hx⟩⟩)
+
 /-- Convert `HasDerivWithinAt` on a symmetric `Icc` to `HasDerivWithinAt` on `Ici`,
 for points in the forward half-open subinterval `Ico t₀ (t₀ + ε)`. -/
 theorem hasDerivWithinAt_Ici_of_Icc_symmetric

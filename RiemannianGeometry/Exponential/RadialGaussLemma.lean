@@ -316,6 +316,26 @@ private theorem hasDerivWithinAt_Ici_of_Ioo
   have hIoi : HasDerivWithinAt f f' (Ioi t) t := hf.Ioi_of_Ioo ht
   exact hIoi.Ici_of_Ioi
 
+private theorem hasDerivWithinAt_Ici_of_hasDerivWithinAt_Icc
+    {F : Type*} [NormedAddCommGroup F] [NormedSpace ℝ F]
+    {f : ℝ → F} {f' : F} {a b t : ℝ}
+    (h : HasDerivWithinAt f f' (Icc a b) t)
+    (hat : a < t) (htb : t < b) :
+    HasDerivWithinAt f f' (Ici t) t :=
+  (h.hasDerivAt (Icc_mem_nhds hat htb)).hasDerivWithinAt
+
+private theorem hasDerivWithinAt_Ici_of_hasDerivWithinAt_Icc_left
+    {F : Type*} [NormedAddCommGroup F] [NormedSpace ℝ F]
+    {f : ℝ → F} {f' : F} {a b : ℝ}
+    (h : HasDerivWithinAt f f' (Icc a b) a)
+    (hab : a < b) :
+    HasDerivWithinAt f f' (Ici a) a := by
+  exact h.congr_set <|
+    Eventually.set_eq <|
+      Filter.eventually_of_mem (Iio_mem_nhds hab) (fun x hx => by
+        simp only [mem_Icc, mem_Ici]
+        exact ⟨fun hmem => hmem.1, fun hmem => ⟨hmem, le_of_lt hx⟩⟩)
+
 private noncomputable def connectionMatrixOfVector
     (Gamma : LeviCivita.CoordinateField.SmoothChristoffelField n)
     (x : Position n) (v : Velocity n) : Matrix (Fin n) (Fin n) ℝ :=
@@ -628,6 +648,14 @@ noncomputable def geodesicEnergy
       (g (coordinateExp (n := n) Gamma p (t • v)))
       ((fderiv ℝ (coordinateExp (n := n) Gamma p) (t • v)) v)
 
+/-- State-space geodesic energy `H(x,v) = g_x(v,v)` for local Riemannian data. -/
+noncomputable def stateEnergy
+    (data : LocalRiemannianData n)
+    (z : Geodesic.Coordinate.State n) : ℝ :=
+  Metric.Coordinate.quadraticForm
+    (data.metricField (Geodesic.Coordinate.statePosition n z))
+    (Geodesic.Coordinate.stateVelocity n z)
+
 /-- The geodesic energy at `t = 0` equals `g(p)(v,v)`, since `dexp(0) = id`. -/
 theorem geodesicEnergy_zero
     (Gamma : LeviCivita.CoordinateField.SmoothChristoffelField n)
@@ -638,6 +666,395 @@ theorem geodesicEnergy_zero
       Metric.Coordinate.quadraticForm (g p) v := by
   simp only [geodesicEnergy, zero_smul, coordinateExp_zero (n := n),
     fderiv_coordinateExp_at_zero (n := n), ContinuousLinearMap.id_apply]
+
+private theorem continuousOn_stateEnergy_of_isCoordinateGeodesicOn
+    (data : LocalRiemannianData n)
+    {gamma : ℝ → Geodesic.Coordinate.State n} {a b : ℝ}
+    (hgamma : Geodesic.Coordinate.IsCoordinateGeodesicOn
+      (Geodesic.Coordinate.christoffelFieldOfSmooth data.Gamma) gamma (Icc a b)) :
+    ContinuousOn (fun t : ℝ => stateEnergy (n := n) data (gamma t)) (Icc a b) := by
+  have hgamma_cont : ContinuousOn gamma (Icc a b) := HasDerivWithinAt.continuousOn hgamma
+  have hpos :
+      ContinuousOn (fun t : ℝ => Geodesic.Coordinate.statePosition n (gamma t)) (Icc a b) := by
+    simpa [Function.comp, Geodesic.Coordinate.statePosition] using
+      continuous_fst.continuousOn.comp hgamma_cont (by intro t ht; exact mem_univ _)
+  have hvel :
+      ContinuousOn (fun t : ℝ => Geodesic.Coordinate.stateVelocity n (gamma t)) (Icc a b) := by
+    simpa [Function.comp, Geodesic.Coordinate.stateVelocity] using
+      continuous_snd.continuousOn.comp hgamma_cont (by intro t ht; exact mem_univ _)
+  have hvelcoord :
+      ∀ i : Fin n,
+        ContinuousOn (fun t : ℝ => Geodesic.Coordinate.stateVelocity n (gamma t) i) (Icc a b) := by
+    intro i
+    exact (continuous_apply i).continuousOn.comp hvel (by intro t ht; exact mem_univ _)
+  have hMetricCoeff :
+      ∀ i j : Fin n,
+        ContinuousOn
+          (fun t : ℝ => data.metricField (Geodesic.Coordinate.statePosition n (gamma t)) i j)
+          (Icc a b) := by
+    intro i j
+    simpa [LocalRiemannianData.metricField, LeviCivita.CoordinateField.tensorAt] using
+      ((data.gSmooth.smooth' i j).continuous.continuousOn.comp hpos
+        (by intro t ht; exact mem_univ _))
+  change ContinuousOn
+    (fun t : ℝ =>
+      ∑ i : Fin n, ∑ j : Fin n,
+        Geodesic.Coordinate.stateVelocity n (gamma t) i *
+          data.metricField (Geodesic.Coordinate.statePosition n (gamma t)) i j *
+          Geodesic.Coordinate.stateVelocity n (gamma t) j)
+    (Icc a b)
+  refine continuousOn_finset_sum _ ?_
+  intro i hi
+  refine continuousOn_finset_sum _ ?_
+  intro j hj
+  simpa [mul_assoc] using ((hvelcoord i).mul (hMetricCoeff i j)).mul (hvelcoord j)
+
+private theorem hasDerivWithinAt_stateEnergy_zero_of_isCoordinateGeodesicOn
+    (data : LocalRiemannianData n)
+    {gamma : ℝ → Geodesic.Coordinate.State n} {a b : ℝ}
+    (hab : a < b)
+    (hgamma : Geodesic.Coordinate.IsCoordinateGeodesicOn
+      (Geodesic.Coordinate.christoffelFieldOfSmooth data.Gamma) gamma (Icc a b)) :
+    ∀ t ∈ Ico a b,
+      HasDerivWithinAt (fun τ : ℝ => stateEnergy (n := n) data (gamma τ)) 0 (Ici t) t := by
+  rcases (Geodesic.Coordinate.isCoordinateGeodesicOn_iff_secondOrder
+    (n := n)
+    (Gamma := Geodesic.Coordinate.christoffelFieldOfSmooth data.Gamma)
+    (gamma := gamma)
+    (s := Icc a b)).mp hgamma with ⟨hpos, hvel⟩
+  intro t ht
+  let x : Position n := Geodesic.Coordinate.statePosition n (gamma t)
+  let V : Velocity n := Geodesic.Coordinate.stateVelocity n (gamma t)
+  let accel : Velocity n :=
+    Geodesic.Coordinate.geodesicAcceleration
+      (Geodesic.Coordinate.christoffelFieldOfSmooth data.Gamma) x V
+  let dgV : Matrix (Fin n) (Fin n) ℝ := fun i j =>
+    ∑ k : Fin n, V k * LeviCivita.CoordinateField.metricDerivative data.gSmooth k i j x
+  have hpos_Icc :
+      HasDerivWithinAt
+        (fun τ : ℝ => Geodesic.Coordinate.statePosition n (gamma τ))
+        V
+        (Icc a b)
+        t := by
+    simpa [x, V] using hpos t ⟨ht.1, ht.2.le⟩
+  have hvel_Icc :
+      HasDerivWithinAt
+        (fun τ : ℝ => Geodesic.Coordinate.stateVelocity n (gamma τ))
+        accel
+        (Icc a b)
+        t := by
+    simpa [x, V, accel] using hvel t ⟨ht.1, ht.2.le⟩
+  have hpos_Ici :
+      HasDerivWithinAt
+        (fun τ : ℝ => Geodesic.Coordinate.statePosition n (gamma τ))
+        V
+        (Ici t)
+        t := by
+    by_cases hta : t = a
+    · subst hta
+      exact hasDerivWithinAt_Ici_of_hasDerivWithinAt_Icc_left hpos_Icc hab
+    · have hat : a < t := lt_of_le_of_ne ht.1 (Ne.symm hta)
+      exact hasDerivWithinAt_Ici_of_hasDerivWithinAt_Icc hpos_Icc hat ht.2
+  have hvel_Ici :
+      HasDerivWithinAt
+        (fun τ : ℝ => Geodesic.Coordinate.stateVelocity n (gamma τ))
+        accel
+        (Ici t)
+        t := by
+    by_cases hta : t = a
+    · subst hta
+      exact hasDerivWithinAt_Ici_of_hasDerivWithinAt_Icc_left hvel_Icc hab
+    · have hat : a < t := lt_of_le_of_ne ht.1 (Ne.symm hta)
+      exact hasDerivWithinAt_Ici_of_hasDerivWithinAt_Icc hvel_Icc hat ht.2
+  have hg :
+      ∀ i j,
+        HasDerivWithinAt
+          (fun τ => data.metricField (Geodesic.Coordinate.statePosition n (gamma τ)) i j)
+          (dgV i j)
+          (Ici t)
+          t := by
+    intro i j
+    have hcoeff :
+        HasDerivWithinAt
+          (fun τ => data.gSmooth i j (Geodesic.Coordinate.statePosition n (gamma τ)))
+          ((fderiv ℝ (fun y => data.gSmooth i j y) x) V)
+          (Ici t)
+          t := by
+      exact (data.gSmooth.differentiableAt_component i j x).hasFDerivAt.comp_hasDerivWithinAt
+        t hpos_Ici
+    have hcoeff_val :
+        (fderiv ℝ (fun y => data.gSmooth i j y) x) V = dgV i j := by
+      have hsum :
+          (fderiv ℝ (fun y => data.gSmooth i j y) x) V =
+            ∑ k : Fin n, V k *
+              (fderiv ℝ (fun y => data.gSmooth i j y) x)
+                (LeviCivita.CoordinateField.coordBasis k) := by
+        simpa using
+          fderiv_smoothScalarField_apply_eq_sum_pderiv
+            (n := n) (f := data.gSmooth.component i j) x V
+      calc
+        (fderiv ℝ (fun y => data.gSmooth i j y) x) V = ∑ k : Fin n, V k *
+            (fderiv ℝ (fun y => data.gSmooth i j y) x)
+              (LeviCivita.CoordinateField.coordBasis k) := hsum
+        _ = dgV i j := by
+          unfold dgV
+          refine Finset.sum_congr rfl ?_
+          intro k hk
+          rw [LeviCivita.CoordinateField.metricDerivative_eq_fderiv]
+    have hcoeff' :
+        HasDerivWithinAt
+          (fun τ => data.metricField (Geodesic.Coordinate.statePosition n (gamma τ)) i j)
+          ((fderiv ℝ (fun y => data.gSmooth i j y) x) V)
+          (Ici t)
+          t := by
+      simpa [LocalRiemannianData.metricField, LeviCivita.CoordinateField.tensorAt] using hcoeff
+    exact hcoeff_val.symm ▸ hcoeff'
+  have hpair :=
+    hasDerivWithinAt_coordinatePairing
+      (n := n)
+      (g := fun τ => data.metricField (Geodesic.Coordinate.statePosition n (gamma τ)))
+      (dg := fun _ => dgV)
+      (Y := fun τ => Geodesic.Coordinate.stateVelocity n (gamma τ))
+      (Z := fun τ => Geodesic.Coordinate.stateVelocity n (gamma τ))
+      (y' := accel)
+      (z' := accel)
+      hg hvel_Ici hvel_Ici
+  have hcancel :
+      ParallelTransport.coordinatePairingAt dgV V V +
+        ParallelTransport.coordinatePairingAt (data.metricField x) accel V +
+        ParallelTransport.coordinatePairingAt (data.metricField x) V accel = 0 := by
+    have hmetric :
+        dgV =
+          (fun i j =>
+            ∑ m : Fin n, (connectionMatrixOfVector (n := n) data.Gamma x V) m i *
+                data.metricField x m j +
+              ∑ m : Fin n, data.metricField x i m *
+                (connectionMatrixOfVector (n := n) data.Gamma x V) m j) := by
+      simpa [dgV, x, V] using
+        metricDerivativeAlong_eq_connectionMatrix_formula (n := n) data x V
+    let A := connectionMatrixOfVector (n := n) data.Gamma x V
+    let G : Matrix (Fin n) (Fin n) ℝ := data.metricField x
+    have hDG :
+        (fun i j =>
+          ∑ m : Fin n, A m i * G m j +
+            ∑ m : Fin n, G i m * A m j) =
+        Matrix.transpose A * G + G * A := by
+      ext i j
+      simp [A, G, Matrix.mul_apply]
+    have hzero :=
+      ParallelTransport.coordinatePairingAt_parallel_deriv_eq_zero
+        (A := fun _ : ℝ => A)
+        (g := fun _ : ℝ => G)
+        (dg := fun _ : ℝ => Matrix.transpose A * G + G * A)
+        0 V V (by simp [hDG])
+    simpa [hmetric, A, G, x, V, accel,
+      coordinateParallelRhs_connectionMatrixOfVector_eq_acceleration (n := n) data.Gamma x V] using
+      hzero
+  have hpair' :
+      HasDerivWithinAt
+        (fun τ : ℝ => stateEnergy (n := n) data (gamma τ))
+        (ParallelTransport.coordinatePairingAt dgV V V +
+          ParallelTransport.coordinatePairingAt (data.metricField x) accel V +
+          ParallelTransport.coordinatePairingAt (data.metricField x) V accel)
+        (Ici t)
+        t := by
+    simpa [stateEnergy, Metric.Coordinate.quadraticForm, ParallelTransport.coordinatePairing] using
+      hpair
+  exact hcancel.symm ▸ hpair'
+
+/-- Along any coordinate geodesic of the Levi-Civita spray for `LocalRiemannianData`, the
+state-space energy `H(x,v) = g_x(v,v)` is constant. This is the owner theorem needed for the
+smooth Hopf-Rinow compact-shell argument; the radial theorem is now just one special case. -/
+theorem stateEnergy_eq_initial_of_isCoordinateGeodesicOn
+    (data : LocalRiemannianData n)
+    {gamma : ℝ → Geodesic.Coordinate.State n} {a b : ℝ}
+    (hab : a ≤ b)
+    (hgamma : Geodesic.Coordinate.IsCoordinateGeodesicOn
+      (Geodesic.Coordinate.christoffelFieldOfSmooth data.Gamma) gamma (Icc a b)) :
+    ∀ t ∈ Icc a b,
+      stateEnergy (n := n) data (gamma t) = stateEnergy (n := n) data (gamma a) := by
+  by_cases hdeg : a = b
+  · intro t ht
+    have ht0 : t = a := le_antisymm (by simpa [hdeg] using ht.2) ht.1
+    simp [ht0]
+  · have hlt : a < b := lt_of_le_of_ne hab hdeg
+    exact constant_of_has_deriv_right_zero
+      (continuousOn_stateEnergy_of_isCoordinateGeodesicOn (n := n) data hgamma)
+      (hasDerivWithinAt_stateEnergy_zero_of_isCoordinateGeodesicOn (n := n) data hlt hgamma)
+
+/-- A global lower metric bound turns conserved geodesic energy into a uniform Euclidean velocity
+bound along the whole interval. -/
+theorem stateVelocity_norm_le_of_metricLowerBound
+    (data : LocalRiemannianData n)
+    {m : ℝ}
+    (hm_pos : 0 < m)
+    (hmetric_lower :
+      ∀ x : Position n, ∀ v : Velocity n,
+        m * Metric.Coordinate.supNormSq v ≤
+          Metric.Coordinate.quadraticForm (data.metricField x) v)
+    {gamma : ℝ → Geodesic.Coordinate.State n} {a b : ℝ}
+    (hab : a ≤ b)
+    (hgamma : Geodesic.Coordinate.IsCoordinateGeodesicOn
+      (Geodesic.Coordinate.christoffelFieldOfSmooth data.Gamma) gamma (Icc a b)) :
+    ∀ t ∈ Icc a b,
+      ‖Geodesic.Coordinate.stateVelocity n (gamma t)‖ ≤
+        Real.sqrt (stateEnergy (n := n) data (gamma a) / m) := by
+  let E : ℝ := stateEnergy (n := n) data (gamma a)
+  have hE_nonneg : 0 ≤ E := by
+    dsimp [E, stateEnergy]
+    exact Metric.Coordinate.quadraticForm_nonneg
+      (data.metricField_posDef (Geodesic.Coordinate.statePosition n (gamma a)))
+      (Geodesic.Coordinate.stateVelocity n (gamma a))
+  intro t ht
+  let v := Geodesic.Coordinate.stateVelocity n (gamma t)
+  have hmetric_lower_t :
+      m * Metric.Coordinate.supNormSq v ≤
+        Metric.Coordinate.quadraticForm
+          (data.metricField (Geodesic.Coordinate.statePosition n (gamma t))) v :=
+    hmetric_lower _ v
+  have henergy :
+      stateEnergy (n := n) data (gamma t) = E := by
+    simpa [E] using
+      stateEnergy_eq_initial_of_isCoordinateGeodesicOn (n := n) data hab hgamma t ht
+  have hsq_le : Metric.Coordinate.supNormSq v ≤ E / m := by
+    rw [le_div_iff₀ hm_pos]
+    calc
+      Metric.Coordinate.supNormSq v * m = m * Metric.Coordinate.supNormSq v := by ring
+      _ ≤ Metric.Coordinate.quadraticForm
+            (data.metricField (Geodesic.Coordinate.statePosition n (gamma t))) v :=
+          hmetric_lower_t
+      _ = stateEnergy (n := n) data (gamma t) := by
+            rfl
+      _ = E := henergy
+  have hnorm_sq : ‖v‖ ^ 2 ≤ E / m := by
+    simpa [Metric.Coordinate.supNormSq, pow_two] using hsq_le
+  calc
+    ‖v‖ = Real.sqrt (‖v‖ ^ 2) := by
+      rw [Real.sqrt_sq (norm_nonneg _)]
+    _ ≤ Real.sqrt (E / m) := by
+      exact Real.sqrt_le_sqrt hnorm_sq
+    _ = Real.sqrt (stateEnergy (n := n) data (gamma a) / m) := by
+      rfl
+
+/-- Under a global lower metric bound, a finite-horizon coordinate geodesic stays in a Euclidean
+closed ball around its initial position. This is the corrected Layer B theorem: it replaces the
+false generic compact-containment statement for arbitrary `LocalRiemannianData`. -/
+theorem statePosition_mem_closedBall_of_metricLowerBound
+    (data : LocalRiemannianData n)
+    {m : ℝ}
+    (hm_pos : 0 < m)
+    (hmetric_lower :
+      ∀ x : Position n, ∀ v : Velocity n,
+        m * Metric.Coordinate.supNormSq v ≤
+          Metric.Coordinate.quadraticForm (data.metricField x) v)
+    {gamma : ℝ → Geodesic.Coordinate.State n} {a b : ℝ}
+    (hab : a ≤ b)
+    (hgamma : Geodesic.Coordinate.IsCoordinateGeodesicOn
+      (Geodesic.Coordinate.christoffelFieldOfSmooth data.Gamma) gamma (Icc a b)) :
+    ∀ t ∈ Icc a b,
+      Geodesic.Coordinate.statePosition n (gamma t) ∈
+        Metric.closedBall
+          (Geodesic.Coordinate.statePosition n (gamma a))
+          (Real.sqrt (stateEnergy (n := n) data (gamma a) / m) * (b - a)) := by
+  rcases (Geodesic.Coordinate.isCoordinateGeodesicOn_iff_secondOrder
+      (n := n)
+      (Gamma := Geodesic.Coordinate.christoffelFieldOfSmooth data.Gamma)
+      (gamma := gamma)
+      (s := Icc a b)).mp hgamma with ⟨hpos, _⟩
+  let C : ℝ := Real.sqrt (stateEnergy (n := n) data (gamma a) / m)
+  have hC_nonneg : 0 ≤ C := by
+    dsimp [C]
+    exact Real.sqrt_nonneg _
+  have hdisp :
+      ∀ t ∈ Icc a b,
+        ‖Geodesic.Coordinate.statePosition n (gamma t) -
+            Geodesic.Coordinate.statePosition n (gamma a)‖ ≤
+          C * (t - a) := by
+    simpa [C] using
+      (norm_image_sub_le_of_norm_deriv_le_segment'
+        (a := a) (b := b)
+        (f := fun τ : ℝ => Geodesic.Coordinate.statePosition n (gamma τ))
+        (f' := fun τ : ℝ => Geodesic.Coordinate.stateVelocity n (gamma τ))
+        (C := C)
+        (hf := by
+          intro x hx
+          exact hpos x hx)
+        (bound := by
+          intro x hx
+          simpa [C] using
+            stateVelocity_norm_le_of_metricLowerBound
+              (n := n) data hm_pos hmetric_lower hab hgamma x (Ico_subset_Icc_self hx)))
+  intro t ht
+  rw [Metric.mem_closedBall, dist_eq_norm]
+  have hsub : t - a ≤ b - a := sub_le_sub_right ht.2 a
+  exact le_trans (hdisp t ht) (mul_le_mul_of_nonneg_left hsub hC_nonneg)
+
+/-- If the base positions of a coordinate geodesic stay inside a compact position set `K`, then
+the full state stays inside a compact shell `K × closedBall(0, R)`. This isolates the geometric
+input needed by the smooth Hopf-Rinow compact-containment argument to compact base containment plus
+the first integral `stateEnergy`. -/
+theorem exists_stateCompactShell_of_isCoordinateGeodesicOn_of_position_isCompact
+    (data : LocalRiemannianData n)
+    {gamma : ℝ → Geodesic.Coordinate.State n} {a b : ℝ}
+    (hab : a ≤ b)
+    (hgamma : Geodesic.Coordinate.IsCoordinateGeodesicOn
+      (Geodesic.Coordinate.christoffelFieldOfSmooth data.Gamma) gamma (Icc a b))
+    {K : Set (Position n)}
+    (hK : IsCompact K)
+    (hbase : ∀ t ∈ Icc a b, Geodesic.Coordinate.statePosition n (gamma t) ∈ K) :
+    ∃ R : ℝ, 0 ≤ R ∧
+      IsCompact (K ×ˢ Metric.closedBall (0 : Velocity n) R) ∧
+      ∀ t ∈ Icc a b, gamma t ∈ K ×ˢ Metric.closedBall (0 : Velocity n) R := by
+  obtain ⟨m, M, hm_pos, hM_pos, hmetric⟩ :=
+    data.exists_uniform_metric_normComparisonOn_isCompact hK
+  let E : ℝ := stateEnergy (n := n) data (gamma a)
+  have hE_nonneg : 0 ≤ E := by
+    dsimp [E, stateEnergy]
+    exact Metric.Coordinate.quadraticForm_nonneg
+      (data.metricField_posDef (Geodesic.Coordinate.statePosition n (gamma a)))
+      (Geodesic.Coordinate.stateVelocity n (gamma a))
+  have henergy :
+      ∀ t ∈ Icc a b,
+        stateEnergy (n := n) data (gamma t) = E := by
+    intro t ht
+    simpa [E] using
+      stateEnergy_eq_initial_of_isCoordinateGeodesicOn (n := n) data hab hgamma t ht
+  let R : ℝ := Real.sqrt (E / m)
+  have hR_nonneg : 0 ≤ R := by
+    dsimp [R]
+    exact Real.sqrt_nonneg _
+  refine ⟨R, hR_nonneg, ?_, ?_⟩
+  · exact hK.prod (isCompact_closedBall (0 : Velocity n) R)
+  · intro t ht
+    constructor
+    · exact hbase t ht
+    · rw [Metric.mem_closedBall, dist_eq_norm, sub_zero]
+      let v := Geodesic.Coordinate.stateVelocity n (gamma t)
+      have hmetric_lower :
+          m * Metric.Coordinate.supNormSq v ≤
+            Metric.Coordinate.quadraticForm
+              (data.metricField (Geodesic.Coordinate.statePosition n (gamma t))) v :=
+        (hmetric _ (hbase t ht) v).1
+      have hsq_le : Metric.Coordinate.supNormSq v ≤ E / m := by
+        rw [le_div_iff₀ hm_pos]
+        calc
+          Metric.Coordinate.supNormSq v * m = m * Metric.Coordinate.supNormSq v := by ring
+          _ ≤ Metric.Coordinate.quadraticForm
+                (data.metricField (Geodesic.Coordinate.statePosition n (gamma t))) v :=
+              hmetric_lower
+          _ = stateEnergy (n := n) data (gamma t) := by
+                rfl
+          _ = E := henergy t ht
+      have hnorm_sq :
+          ‖v‖ ^ 2 ≤ E / m := by
+        simpa [Metric.Coordinate.supNormSq, pow_two] using hsq_le
+      calc
+        ‖v‖ = Real.sqrt (‖v‖ ^ 2) := by
+          rw [Real.sqrt_sq (norm_nonneg _)]
+        _ ≤ Real.sqrt (E / m) := by
+          exact Real.sqrt_le_sqrt hnorm_sq
+        _ = R := by
+          rfl
 
 /-! ### Part 5: Updated constructor for LocalAnalyticConstruction
 
@@ -834,7 +1251,251 @@ private theorem hasDerivWithinAt_radialVelocityField_of_localRiemannianData
     simpa [hEq_pos, hEq_vel] using hrad_Ioo'
   exact hasDerivWithinAt_Ici_of_Ioo ht.2 hrad_Ioo
 
-/-- The derivative of the radial pairing function equals `g(p)(v,w)` on `[0,1)`,
+/-! ### Algebraic helpers for the energy cancellation -/
+
+/-- Metric symmetry for the coordinate pairing: `g(X,Y) = g(Y,X)` when g is symmetric. -/
+private theorem coordinatePairingAt_comm_of_symm
+    {g : Matrix (Fin n) (Fin n) ℝ}
+    (hsymm : ∀ i j, g i j = g j i)
+    (X Y : Velocity n) :
+    ParallelTransport.coordinatePairingAt g X Y =
+      ParallelTransport.coordinatePairingAt g Y X := by
+  simp only [ParallelTransport.coordinatePairingAt]
+  rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl; intro i _
+  apply Finset.sum_congr rfl; intro j _
+  rw [hsymm i j]; ring
+
+private theorem metricField_symm
+    (data : LocalRiemannianData n)
+    (x : Position n) :
+    ∀ i j : Fin n, data.metricField x i j = data.metricField x j i := by
+  intro i j
+  simpa [LocalRiemannianData.metricField, LeviCivita.CoordinateField.tensorAt] using
+    data.symm x i j
+
+/-- **Energy cancellation**: the three-term derivative of the geodesic energy is zero.
+`dg(V)(V,V) + g(accel,V) + g(V,accel) = 0` where `dg(V) = ΓᵀG + GΓ` (metric compatibility)
+and `accel = -ΓV·V` (geodesic equation). The four terms pair off: `g(ΓV,V) + g(V,ΓV) - g(ΓV,V) - g(V,ΓV) = 0`. -/
+private theorem energy_deriv_cancellation
+    (data : LocalRiemannianData n)
+    (x : Position n) (V : Velocity n) :
+    ParallelTransport.coordinatePairingAt
+      (fun i j => ∑ m, (connectionMatrixOfVector (n := n) data.Gamma x V) m i *
+          data.metricField x m j +
+        ∑ m, data.metricField x i m *
+          (connectionMatrixOfVector (n := n) data.Gamma x V) m j)
+      V V +
+    ParallelTransport.coordinatePairingAt (data.metricField x)
+      (Geodesic.Coordinate.geodesicAcceleration
+        (Geodesic.Coordinate.christoffelFieldOfSmooth data.Gamma) x V) V +
+    ParallelTransport.coordinatePairingAt (data.metricField x) V
+      (Geodesic.Coordinate.geodesicAcceleration
+        (Geodesic.Coordinate.christoffelFieldOfSmooth data.Gamma) x V) = 0 := by
+  let A := connectionMatrixOfVector (n := n) data.Gamma x V
+  let G : Matrix (Fin n) (Fin n) ℝ := data.metricField x
+  have hDG :
+      (fun i j =>
+        ∑ m : Fin n, A m i * G m j +
+          ∑ m : Fin n, G i m * A m j) =
+      Matrix.transpose A * G + G * A := by
+    ext i j
+    simp [A, G, Matrix.mul_apply]
+  have hzero :=
+    ParallelTransport.coordinatePairingAt_parallel_deriv_eq_zero
+      (A := fun _ : ℝ => A)
+      (g := fun _ : ℝ => G)
+      (dg := fun _ : ℝ => Matrix.transpose A * G + G * A)
+      0 V V (by simp)
+  simpa [A, G, hDG, coordinateParallelRhs_connectionMatrixOfVector_eq_acceleration
+    (n := n) data.Gamma x V] using hzero
+
+private theorem continuousOn_geodesicEnergy_of_localRiemannianData
+    (data : LocalRiemannianData n)
+    (p : Position n)
+    {v : Velocity n}
+    (hv : v ∈ (coordinateExpPartialHomeomorph (n := n) data.Gamma p).source) :
+    ContinuousOn (geodesicEnergy (n := n) data.Gamma data.metricField p v) (Icc 0 1) := by
+  let expMap := coordinateExp (n := n) data.Gamma p
+  have hvsource : v ∈ coordinateExpSource (n := n) data.Gamma p :=
+    coordinateExpPartialHomeomorph_source_subset_coordinateExpSource (n := n) data.Gamma p hv
+  have hExp : ContinuousOn expMap (coordinateExpSource (n := n) data.Gamma p) := by
+    intro u hu
+    exact (contDiffAt_coordinateExp (n := n) data.Gamma p hu).continuousAt.continuousWithinAt
+  have hExpRadial : ContinuousOn (fun t : ℝ => expMap (t • v)) (Icc 0 1) :=
+    hExp.comp ((continuous_id.smul continuous_const).continuousOn)
+      (fun t ht => smul_mem_coordinateExpSource (n := n) data.Gamma p hvsource ht.1 ht.2)
+  have hV :
+      ContinuousOn (fun t : ℝ => (fderiv ℝ expMap (t • v)) v) (Icc 0 1) :=
+    continuousOn_fderiv_coordinateExp_radial_apply (n := n) data.Gamma p hvsource v
+  have hVcoord :
+      ∀ i : Fin n,
+        ContinuousOn (fun t : ℝ => ((fderiv ℝ expMap (t • v)) v) i) (Icc 0 1) := by
+    intro i
+    exact (continuous_apply i).continuousOn.comp hV (by intro t ht; exact mem_univ _)
+  have hMetricCoeff :
+      ∀ i j : Fin n,
+        ContinuousOn (fun t : ℝ => data.metricField (expMap (t • v)) i j) (Icc 0 1) := by
+    intro i j
+    simpa [LocalRiemannianData.metricField] using
+      ((data.gSmooth.smooth' i j).continuous.continuousOn.comp hExpRadial
+        (by intro t ht; exact mem_univ _))
+  change ContinuousOn
+    (fun t : ℝ =>
+      ∑ i : Fin n, ∑ j : Fin n,
+        ((fderiv ℝ expMap (t • v)) v) i *
+          data.metricField (expMap (t • v)) i j *
+          ((fderiv ℝ expMap (t • v)) v) j)
+    (Icc 0 1)
+  refine continuousOn_finset_sum _ ?_
+  intro i _
+  refine continuousOn_finset_sum _ ?_
+  intro j _
+  simpa [expMap, mul_assoc] using ((hVcoord i).mul (hMetricCoeff i j)).mul (hVcoord j)
+
+private theorem hasDerivWithinAt_geodesicEnergy_zero_of_localRiemannianData
+    (data : LocalRiemannianData n)
+    (p : Position n)
+    {v : Velocity n}
+    (hv : v ∈ (coordinateExpPartialHomeomorph (n := n) data.Gamma p).source) :
+    ∀ t ∈ Ico (0 : ℝ) 1,
+      HasDerivWithinAt (geodesicEnergy (n := n) data.Gamma data.metricField p v) 0 (Ici t) t := by
+  let expMap := coordinateExp (n := n) data.Gamma p
+  have hvsource : v ∈ coordinateExpSource (n := n) data.Gamma p :=
+    coordinateExpPartialHomeomorph_source_subset_coordinateExpSource (n := n) data.Gamma p hv
+  intro t ht
+  let x : Position n := expMap (t • v)
+  let V : Velocity n := (fderiv ℝ expMap (t • v)) v
+  let dgV : Matrix (Fin n) (Fin n) ℝ := fun i j =>
+    ∑ k : Fin n, V k *
+      LeviCivita.CoordinateField.metricDerivative data.gSmooth k i j x
+  have hg :
+      ∀ i j, HasDerivWithinAt
+        (fun τ => data.metricField (expMap (τ • v)) i j)
+        (dgV i j) (Ici t) t := by
+    intro i j
+    have h :=
+      hasDerivAt_metricFieldCoeff_coordinateExp_line
+        (n := n) data p hvsource i j ⟨ht.1, ht.2.le⟩
+    simpa [expMap, x, V, dgV] using h.hasDerivWithinAt
+  have hV :
+      HasDerivWithinAt
+        (fun τ : ℝ => (fderiv ℝ expMap (τ • v)) v)
+        (Geodesic.Coordinate.geodesicAcceleration
+          (Geodesic.Coordinate.christoffelFieldOfSmooth data.Gamma) x V)
+        (Ici t) t := by
+    simpa [expMap, x, V] using
+      hasDerivWithinAt_radialVelocityField_of_localRiemannianData
+        (n := n) data p hv t ht
+  have hpair :=
+    hasDerivWithinAt_coordinatePairing
+      (n := n) (g := fun τ => data.metricField (expMap (τ • v)))
+      (dg := fun _ => dgV)
+      (Y := fun τ => (fderiv ℝ expMap (τ • v)) v)
+      (Z := fun τ => (fderiv ℝ expMap (τ • v)) v)
+      (y' := Geodesic.Coordinate.geodesicAcceleration
+        (Geodesic.Coordinate.christoffelFieldOfSmooth data.Gamma) x V)
+      (z' := Geodesic.Coordinate.geodesicAcceleration
+        (Geodesic.Coordinate.christoffelFieldOfSmooth data.Gamma) x V)
+      hg hV hV
+  have hcancel :
+      ParallelTransport.coordinatePairingAt dgV V V +
+        ParallelTransport.coordinatePairingAt (data.metricField x)
+          (Geodesic.Coordinate.geodesicAcceleration
+            (Geodesic.Coordinate.christoffelFieldOfSmooth data.Gamma) x V) V +
+        ParallelTransport.coordinatePairingAt (data.metricField x) V
+          (Geodesic.Coordinate.geodesicAcceleration
+            (Geodesic.Coordinate.christoffelFieldOfSmooth data.Gamma) x V) = 0 := by
+    have hmetric :
+        dgV =
+          (fun i j =>
+            ∑ m : Fin n, (connectionMatrixOfVector (n := n) data.Gamma x V) m i *
+                data.metricField x m j +
+              ∑ m : Fin n, data.metricField x i m *
+                (connectionMatrixOfVector (n := n) data.Gamma x V) m j) := by
+      simpa [dgV, x, V] using
+        metricDerivativeAlong_eq_connectionMatrix_formula (n := n) data x V
+    rw [hmetric]
+    simpa [x, V] using energy_deriv_cancellation (n := n) data x V
+  have hpair' :
+      HasDerivWithinAt
+        (geodesicEnergy (n := n) data.Gamma data.metricField p v)
+        (ParallelTransport.coordinatePairingAt dgV V V +
+          ParallelTransport.coordinatePairingAt (data.metricField x)
+            (Geodesic.Coordinate.geodesicAcceleration
+              (Geodesic.Coordinate.christoffelFieldOfSmooth data.Gamma) x V) V +
+          ParallelTransport.coordinatePairingAt (data.metricField x) V
+            (Geodesic.Coordinate.geodesicAcceleration
+              (Geodesic.Coordinate.christoffelFieldOfSmooth data.Gamma) x V))
+        (Ici t) t := by
+    simpa [geodesicEnergy, expMap, Metric.Coordinate.quadraticForm,
+      ParallelTransport.coordinatePairing] using hpair
+  exact hcancel.symm ▸ hpair'
+
+/-- For concrete local Riemannian data, the radial geodesic energy is constant on `[0,1]`. This
+packages the metric-compatibility argument in a reusable owner theorem rather than keeping it local
+to the radial Gauss-lemma construction. -/
+theorem geodesicEnergy_eq_initial_of_localRiemannianData
+    (data : LocalRiemannianData n)
+    (p : Position n)
+    {v : Velocity n}
+    (hv : v ∈ (coordinateExpPartialHomeomorph (n := n) data.Gamma p).source) :
+    ∀ t ∈ Icc (0 : ℝ) 1,
+      geodesicEnergy (n := n) data.Gamma data.metricField p v t =
+        Metric.Coordinate.quadraticForm (data.metricField p) v := by
+  have hcont :=
+    continuousOn_geodesicEnergy_of_localRiemannianData (n := n) data p hv
+  have hderiv :=
+    hasDerivWithinAt_geodesicEnergy_zero_of_localRiemannianData (n := n) data p hv
+  have hconst := constant_of_has_deriv_right_zero hcont hderiv
+  intro t ht
+  calc
+    geodesicEnergy (n := n) data.Gamma data.metricField p v t
+      = geodesicEnergy (n := n) data.Gamma data.metricField p v 0 := hconst t ht
+    _ = Metric.Coordinate.quadraticForm (data.metricField p) v :=
+      geodesicEnergy_zero (n := n) data.Gamma data.metricField p v
+
+private theorem hasDerivAt_initialMetricQuadratic_line
+    (data : LocalRiemannianData n)
+    (p : Position n)
+    (v w : Velocity n) :
+    HasDerivAt
+      (fun s : ℝ => Metric.Coordinate.quadraticForm (data.metricField p) (v + s • w))
+      (2 * metricPairingAt data.metricField p v w)
+      0 := by
+  let G : Matrix (Fin n) (Fin n) ℝ := data.metricField p
+  have hline :
+      HasDerivAt (fun s : ℝ => v + s • w) w 0 := by
+    simpa [one_smul, Pi.add_apply] using
+      (((hasDerivAt_id (0 : ℝ)).smul_const w).const_add v)
+  have hg :
+      ∀ i j : Fin n, HasDerivAt (fun _ : ℝ => G i j) 0 0 := by
+    intro i j
+    simpa using (hasDerivAt_const (0 : ℝ) (G i j))
+  have hpair :=
+    ParallelTransport.hasDerivAt_coordinatePairing
+      (n := n)
+      (g := fun _ : ℝ => G)
+      (dg := fun _ : ℝ => (0 : Matrix (Fin n) (Fin n) ℝ))
+      (Y := fun s : ℝ => v + s • w)
+      (Z := fun s : ℝ => v + s • w)
+      (y' := w) (z' := w)
+      hg hline hline
+  have hcomm :
+      ParallelTransport.coordinatePairingAt G w v =
+        ParallelTransport.coordinatePairingAt G v w :=
+    coordinatePairingAt_comm_of_symm (n := n) (metricField_symm (n := n) data p) w v
+  have hpair' :
+      HasDerivAt
+        (fun s : ℝ => Metric.Coordinate.quadraticForm (data.metricField p) (v + s • w))
+        (ParallelTransport.coordinatePairingAt G w v +
+          ParallelTransport.coordinatePairingAt G v w)
+        0 := by
+    simpa [G, Metric.Coordinate.quadraticForm, ParallelTransport.coordinatePairing,
+      ParallelTransport.coordinatePairingAt] using hpair
+  simpa [G, metricPairingAt, hcomm, two_mul] using hpair'
+
+/-- **The derivative of the radial pairing function equals `g(p)(v,w)` on `[0,1)`,
 via the geodesic equation, torsion-free interchange, and metric compatibility. -/
 private theorem hasDerivWithinAt_radialPairingFn_of_localRiemannianData
     (data : LocalRiemannianData n)
@@ -846,7 +1507,367 @@ private theorem hasDerivWithinAt_radialPairingFn_of_localRiemannianData
     ∀ t ∈ Ico (0 : ℝ) 1,
       HasDerivWithinAt (radialPairingFn (n := n) data.Gamma data.metricField p v w)
         (metricPairingAt data.metricField p v w) (Ici t) t := by
-  sorry -- Derivative = g(p)(v,w) via geodesic eq + torsion-free + metric compatibility
+  have hvsource : v ∈ coordinateExpSource (n := n) data.Gamma p :=
+    coordinateExpPartialHomeomorph_source_subset_coordinateExpSource (n := n) data.Gamma p _hv
+  intro t ht
+  let expMap := coordinateExp (n := n) data.Gamma p
+  let ε :=
+    (Geodesic.Coordinate.localCoordinateGeodesicFlowData
+      (n := n) data.Gamma 0 (baseState n p)).ε
+  let x : Position n := expMap (t • v)
+  let V : Velocity n := (fderiv ℝ expMap (t • v)) v
+  let S : Velocity n :=
+    Geodesic.Coordinate.statePosition n
+      (geodesicFamilyStateVariation (n := n) data.Gamma p v w t)
+  let dS : Velocity n :=
+    ε • Geodesic.Coordinate.stateVelocity n
+      (geodesicFamilyStateVariation (n := n) data.Gamma p v w t)
+  let G : Matrix (Fin n) (Fin n) ℝ := data.metricField x
+  let A : Matrix (Fin n) (Fin n) ℝ := connectionMatrixOfVector (n := n) data.Gamma x V
+  let B : Matrix (Fin n) (Fin n) ℝ := connectionMatrixOfVector (n := n) data.Gamma x S
+  let c : ℝ := ParallelTransport.coordinatePairingAt G V (Matrix.mulVec B V + dS)
+  let accel : Velocity n :=
+    Geodesic.Coordinate.geodesicAcceleration
+      (Geodesic.Coordinate.christoffelFieldOfSmooth data.Gamma) x V
+  let variationLine : ℝ → ℝ := fun τ =>
+    ParallelTransport.coordinatePairingAt
+      (data.metricField (expMap (τ • v)))
+      ((fderiv ℝ expMap (τ • v)) v)
+      (Geodesic.Coordinate.statePosition n
+        (geodesicFamilyStateVariation (n := n) data.Gamma p v w τ))
+  let stateLine : ℝ → Geodesic.Coordinate.State n := fun s =>
+    ((geodesicFamilyAtBaseOfLocalCoordinateFlow (n := n) p data.Gamma).solve (v + s • w) t)
+  let energyLine : ℝ → ℝ := fun s =>
+    ParallelTransport.coordinatePairingAt
+      (data.metricField (Geodesic.Coordinate.statePosition n (stateLine s)))
+      (Geodesic.Coordinate.stateVelocity n (stateLine s))
+      (Geodesic.Coordinate.stateVelocity n (stateLine s))
+  let quadLine : ℝ → ℝ := fun s =>
+    Metric.Coordinate.quadraticForm (data.metricField p) (v + s • w)
+  let dgV : Matrix (Fin n) (Fin n) ℝ := fun i j =>
+    ∑ k : Fin n, V k *
+      LeviCivita.CoordinateField.metricDerivative data.gSmooth k i j x
+  let dgS : Matrix (Fin n) (Fin n) ℝ := fun i j =>
+    ∑ k : Fin n, S k *
+      LeviCivita.CoordinateField.metricDerivative data.gSmooth k i j x
+  have htIcc : t ∈ Icc (0 : ℝ) 1 := ⟨ht.1, ht.2.le⟩
+  have hS_eq :
+      S = t • ((fderiv ℝ expMap (t • v)) w) := by
+    simpa [S, expMap] using
+      statePosition_geodesicFamilyStateVariation_eq
+        (n := n) data.Gamma p hvsource w htIcc
+  have hgV :
+      ∀ i j, HasDerivWithinAt
+        (fun τ => data.metricField (expMap (τ • v)) i j)
+        (dgV i j) (Ici t) t := by
+    intro i j
+    have h :=
+      hasDerivAt_metricFieldCoeff_coordinateExp_line
+        (n := n) data p hvsource i j htIcc
+    simpa [expMap, x, V, dgV] using h.hasDerivWithinAt
+  have hV :
+      HasDerivWithinAt
+        (fun τ : ℝ => (fderiv ℝ expMap (τ • v)) v)
+        accel
+        (Ici t) t := by
+    simpa [expMap, x, V, accel] using
+      hasDerivWithinAt_radialVelocityField_of_localRiemannianData
+        (n := n) data p _hv t ht
+  have hS :
+      HasDerivWithinAt
+        (fun τ : ℝ =>
+          Geodesic.Coordinate.statePosition n
+            (geodesicFamilyStateVariation (n := n) data.Gamma p v w τ))
+        dS
+        (Ici t) t := by
+    simpa [dS, ε] using
+      hasDerivWithinAt_statePosition_geodesicFamilyStateVariation
+        (n := n) data.Gamma p hvsource w ht
+  have hpairRad_raw :=
+    hasDerivWithinAt_coordinatePairing
+      (n := n)
+      (g := fun τ => data.metricField (expMap (τ • v)))
+      (dg := fun _ => dgV)
+      (Y := fun τ => (fderiv ℝ expMap (τ • v)) v)
+      (Z := fun τ =>
+        Geodesic.Coordinate.statePosition n
+          (geodesicFamilyStateVariation (n := n) data.Gamma p v w τ))
+      (y' := accel) (z' := dS)
+      hgV hV hS
+  have hpairRad :
+      HasDerivWithinAt variationLine
+        (ParallelTransport.coordinatePairingAt dgV V S +
+          ParallelTransport.coordinatePairingAt G accel S +
+          ParallelTransport.coordinatePairingAt G V dS)
+        (Ici t) t := by
+    simpa [variationLine, expMap, x, V, S, dS, G, accel, ParallelTransport.coordinatePairing]
+      using hpairRad_raw
+  have hmetricV :
+      dgV =
+        (fun i j =>
+          ∑ m : Fin n, A m i * G m j +
+            ∑ m : Fin n, G i m * A m j) := by
+    simpa [dgV, A, G, x, V] using
+      metricDerivativeAlong_eq_connectionMatrix_formula (n := n) data x V
+  have hDG_V : dgV = Matrix.transpose A * G + G * A := by
+    rw [hmetricV]
+    ext i j
+    simp [A, G, Matrix.mul_apply]
+  have haccel :
+      accel = -(Matrix.mulVec A V) := by
+    calc
+      accel
+        = ParallelTransport.coordinateParallelRhs (fun _ : ℝ => A) 0 V := by
+            symm
+            simpa [A] using
+              coordinateParallelRhs_connectionMatrixOfVector_eq_acceleration
+                (n := n) data.Gamma x V
+      _ = -(Matrix.mulVec A V) := by
+            simp [ParallelTransport.coordinateParallelRhs]
+  have hzeroVS :
+      ParallelTransport.coordinatePairingAt dgV V S +
+        ParallelTransport.coordinatePairingAt G accel S +
+        ParallelTransport.coordinatePairingAt G V (-(Matrix.mulVec A S)) = 0 := by
+    have hz :=
+      ParallelTransport.coordinatePairingAt_parallel_deriv_eq_zero
+        (A := fun _ : ℝ => A)
+        (g := fun _ : ℝ => G)
+        (dg := fun _ : ℝ => dgV)
+        0 V S hDG_V
+    rw [haccel]
+    simpa [G, A, ParallelTransport.coordinateParallelRhs] using hz
+  have hnegAS :
+      ParallelTransport.coordinatePairingAt G V (-(Matrix.mulVec A S)) =
+        -ParallelTransport.coordinatePairingAt G V (Matrix.mulVec A S) := by
+    simp [ParallelTransport.coordinatePairingAt]
+  have hVS :
+      ParallelTransport.coordinatePairingAt dgV V S +
+        ParallelTransport.coordinatePairingAt G accel S =
+        ParallelTransport.coordinatePairingAt G V (Matrix.mulVec A S) := by
+    rw [hnegAS] at hzeroVS
+    linarith
+  have hGamma_symm :
+      Matrix.mulVec A S = Matrix.mulVec B V := by
+    simpa [A, B, connectionMatrixOfVector] using
+      (connectionMatrix_mulVec_symm (n := n) data x V S)
+  have hrad_val :
+      ParallelTransport.coordinatePairingAt dgV V S +
+        ParallelTransport.coordinatePairingAt G accel S +
+        ParallelTransport.coordinatePairingAt G V dS = c := by
+    rw [hVS, hGamma_symm]
+    simp [c, G, B, dS, ParallelTransport.coordinatePairingAt,
+      Finset.sum_add_distrib, mul_add, add_mul, mul_assoc]
+  have hvariation :
+      HasDerivWithinAt variationLine c (Ici t) t := hrad_val ▸ hpairRad
+  have heqRad :
+      radialPairingFn (n := n) data.Gamma data.metricField p v w =ᶠ[𝓝[Set.Ici t] t]
+        variationLine := by
+    filter_upwards [inter_mem_nhdsWithin (Ici t) (Iio_mem_nhds ht.2)] with τ hτ
+    have hτIcc : τ ∈ Icc (0 : ℝ) 1 := ⟨le_trans ht.1 hτ.1, hτ.2.le⟩
+    have hcurve :
+        Geodesic.Coordinate.statePosition n
+          ((geodesicFamilyAtBaseOfLocalCoordinateFlow (n := n) p data.Gamma).solve v τ) =
+          expMap (τ • v) := by
+      simpa [expMap] using
+        (coordinateExp_smul_eq_geodesicFamily_position
+          (n := n) data.Gamma p hvsource hτIcc).symm
+    simpa [variationLine, hcurve, expMap] using
+      radialPairingFn_eq_variationField
+        (n := n) data.Gamma data.metricField p _hv w hτIcc
+  have hradial :
+      HasDerivWithinAt
+        (radialPairingFn (n := n) data.Gamma data.metricField p v w)
+        c (Ici t) t := by
+    refine hvariation.congr_of_eventuallyEq heqRad ?_
+    have hcurve :
+        Geodesic.Coordinate.statePosition n
+          ((geodesicFamilyAtBaseOfLocalCoordinateFlow (n := n) p data.Gamma).solve v t) =
+          expMap (t • v) := by
+      simpa [expMap] using
+        (coordinateExp_smul_eq_geodesicFamily_position
+          (n := n) data.Gamma p hvsource htIcc).symm
+    simpa [variationLine, hcurve, expMap] using
+      radialPairingFn_eq_variationField
+        (n := n) data.Gamma data.metricField p _hv w htIcc
+  have hgS :
+      ∀ i j, HasDerivAt
+        (fun s =>
+          data.metricField (Geodesic.Coordinate.statePosition n (stateLine s)) i j)
+        (dgS i j) 0 := by
+    intro i j
+    have h :=
+      hasDerivAt_metricFieldCoeff_geodesicFamily_line
+        (n := n) data p hvsource w i j htIcc
+    simpa [stateLine, expMap, x, S, dgS, hS_eq] using h
+  have hVel :
+      HasDerivAt
+        (fun s => Geodesic.Coordinate.stateVelocity n (stateLine s))
+        dS 0 := by
+    simpa [stateLine, dS, ε] using
+      hasDerivAt_geodesicFamily_velocity_line
+        (n := n) data.Gamma p hvsource w htIcc
+  have hpairEnergy_raw :=
+    ParallelTransport.hasDerivAt_coordinatePairing
+      (n := n)
+      (g := fun s =>
+        data.metricField (Geodesic.Coordinate.statePosition n (stateLine s)))
+      (dg := fun _ => dgS)
+      (Y := fun s => Geodesic.Coordinate.stateVelocity n (stateLine s))
+      (Z := fun s => Geodesic.Coordinate.stateVelocity n (stateLine s))
+      (y' := dS) (z' := dS)
+      hgS hVel hVel
+  have hpairEnergy :
+      HasDerivAt energyLine
+        (ParallelTransport.coordinatePairingAt dgS V V +
+          ParallelTransport.coordinatePairingAt G dS V +
+          ParallelTransport.coordinatePairingAt G V dS)
+        0 := by
+    have hpos0 :
+        Geodesic.Coordinate.statePosition n (stateLine 0) = x := by
+      simpa [stateLine, x, expMap, zero_smul, add_zero] using
+        (coordinateExp_smul_eq_geodesicFamily_position
+          (n := n) data.Gamma p hvsource htIcc).symm
+    have hvel0 :
+        Geodesic.Coordinate.stateVelocity n (stateLine 0) = V := by
+      simpa [stateLine, x, V, expMap, zero_smul, add_zero] using
+        geodesicFamily_velocity_eq_fderiv_radial
+          (n := n) data.Gamma p _hv t htIcc
+    have hpairEnergy_raw' :
+        HasDerivAt energyLine
+          (ParallelTransport.coordinatePairingAt dgS
+              (Geodesic.Coordinate.stateVelocity n (stateLine 0))
+              (Geodesic.Coordinate.stateVelocity n (stateLine 0)) +
+            ParallelTransport.coordinatePairingAt
+              (data.metricField (Geodesic.Coordinate.statePosition n (stateLine 0)))
+              dS
+              (Geodesic.Coordinate.stateVelocity n (stateLine 0)) +
+            ParallelTransport.coordinatePairingAt
+              (data.metricField (Geodesic.Coordinate.statePosition n (stateLine 0)))
+              (Geodesic.Coordinate.stateVelocity n (stateLine 0))
+              dS)
+          0 := by
+      simpa [energyLine, stateLine, ParallelTransport.coordinatePairing] using hpairEnergy_raw
+    have hval :
+        ParallelTransport.coordinatePairingAt dgS
+            (Geodesic.Coordinate.stateVelocity n (stateLine 0))
+            (Geodesic.Coordinate.stateVelocity n (stateLine 0)) +
+          ParallelTransport.coordinatePairingAt
+            (data.metricField (Geodesic.Coordinate.statePosition n (stateLine 0)))
+            dS
+            (Geodesic.Coordinate.stateVelocity n (stateLine 0)) +
+          ParallelTransport.coordinatePairingAt
+            (data.metricField (Geodesic.Coordinate.statePosition n (stateLine 0)))
+            (Geodesic.Coordinate.stateVelocity n (stateLine 0))
+            dS =
+          ParallelTransport.coordinatePairingAt dgS V V +
+            ParallelTransport.coordinatePairingAt G dS V +
+            ParallelTransport.coordinatePairingAt G V dS := by
+      simpa [G, V, dS, hpos0, hvel0]
+    exact hval ▸ hpairEnergy_raw'
+  have hmetricS :
+      dgS =
+        (fun i j =>
+          ∑ m : Fin n, B m i * G m j +
+            ∑ m : Fin n, G i m * B m j) := by
+    simpa [dgS, B, G, x, S] using
+      metricDerivativeAlong_eq_connectionMatrix_formula (n := n) data x S
+  have hDG_S : dgS = Matrix.transpose B * G + G * B := by
+    rw [hmetricS]
+    ext i j
+    simp [B, G, Matrix.mul_apply]
+  have hzeroVV :
+      ParallelTransport.coordinatePairingAt dgS V V +
+        ParallelTransport.coordinatePairingAt G (-(Matrix.mulVec B V)) V +
+        ParallelTransport.coordinatePairingAt G V (-(Matrix.mulVec B V)) = 0 := by
+    have hz :=
+      ParallelTransport.coordinatePairingAt_parallel_deriv_eq_zero
+        (A := fun _ : ℝ => B)
+        (g := fun _ : ℝ => G)
+        (dg := fun _ : ℝ => dgS)
+        0 V V hDG_S
+    simpa [G, B, ParallelTransport.coordinateParallelRhs] using hz
+  have hnegLeft :
+      ParallelTransport.coordinatePairingAt G (-(Matrix.mulVec B V)) V =
+        -ParallelTransport.coordinatePairingAt G (Matrix.mulVec B V) V := by
+    simp [ParallelTransport.coordinatePairingAt]
+  have hnegRight :
+      ParallelTransport.coordinatePairingAt G V (-(Matrix.mulVec B V)) =
+        -ParallelTransport.coordinatePairingAt G V (Matrix.mulVec B V) := by
+    simp [ParallelTransport.coordinatePairingAt]
+  have hmetricTerm :
+      ParallelTransport.coordinatePairingAt dgS V V =
+        ParallelTransport.coordinatePairingAt G (Matrix.mulVec B V) V +
+          ParallelTransport.coordinatePairingAt G V (Matrix.mulVec B V) := by
+    rw [hnegLeft, hnegRight] at hzeroVV
+    linarith
+  have henergy_raw :
+      ParallelTransport.coordinatePairingAt dgS V V +
+        ParallelTransport.coordinatePairingAt G dS V +
+        ParallelTransport.coordinatePairingAt G V dS =
+        ParallelTransport.coordinatePairingAt G (Matrix.mulVec B V + dS) V +
+          ParallelTransport.coordinatePairingAt G V (Matrix.mulVec B V + dS) := by
+    rw [hmetricTerm]
+    simp [ParallelTransport.coordinatePairingAt, Finset.sum_add_distrib,
+      mul_add, add_mul, add_assoc]
+    ring
+  have hcommU :
+      ParallelTransport.coordinatePairingAt G (Matrix.mulVec B V + dS) V =
+        ParallelTransport.coordinatePairingAt G V (Matrix.mulVec B V + dS) :=
+    coordinatePairingAt_comm_of_symm (n := n) (metricField_symm (n := n) data x)
+      (Matrix.mulVec B V + dS) V
+  have henergy_val :
+      ParallelTransport.coordinatePairingAt dgS V V +
+        ParallelTransport.coordinatePairingAt G dS V +
+        ParallelTransport.coordinatePairingAt G V dS = 2 * c := by
+    rw [henergy_raw, hcommU]
+    simp [c, two_mul]
+  have henergyFormula : HasDerivAt energyLine (2 * c) 0 := henergy_val ▸ hpairEnergy
+  have hmem_eventually :
+      ∀ᶠ s in 𝓝 (0 : ℝ),
+        v + s • w ∈ (coordinateExpPartialHomeomorph (n := n) data.Gamma p).source := by
+    have hopen :
+        IsOpen ((coordinateExpPartialHomeomorph (n := n) data.Gamma p).source) :=
+      (coordinateExpPartialHomeomorph (n := n) data.Gamma p).open_source
+    have hcont :
+        ContinuousAt (fun s : ℝ => v + s • w) 0 :=
+      ((continuous_const.add (continuous_id.smul continuous_const))).continuousAt
+    have hbase : v + (0 : ℝ) • w ∈ (coordinateExpPartialHomeomorph (n := n) data.Gamma p).source := by
+      simpa [zero_smul, add_zero] using _hv
+    exact hcont.preimage_mem_nhds (hopen.mem_nhds hbase)
+  have heqEnergy : energyLine =ᶠ[𝓝 (0 : ℝ)] quadLine := by
+    filter_upwards [hmem_eventually] with s hs
+    let u : Velocity n := v + s • w
+    have hsSource : u ∈ coordinateExpSource (n := n) data.Gamma p :=
+      coordinateExpPartialHomeomorph_source_subset_coordinateExpSource (n := n) data.Gamma p hs
+    have hpos :
+        Geodesic.Coordinate.statePosition n (stateLine s) =
+          expMap (t • u) := by
+      simpa [stateLine, u, expMap] using
+        (coordinateExp_smul_eq_geodesicFamily_position
+          (n := n) data.Gamma p hsSource htIcc).symm
+    have hvel :
+        Geodesic.Coordinate.stateVelocity n (stateLine s) =
+          (fderiv ℝ expMap (t • u)) u := by
+      simpa [stateLine, u, expMap] using
+        geodesicFamily_velocity_eq_fderiv_radial
+          (n := n) data.Gamma p hs t htIcc
+    have henergy :
+        geodesicEnergy (n := n) data.Gamma data.metricField p u t =
+          Metric.Coordinate.quadraticForm (data.metricField p) u := by
+      exact geodesicEnergy_eq_initial_of_localRiemannianData
+        (n := n) data p hs t htIcc
+    simpa [energyLine, quadLine, stateLine, u, expMap, hpos, hvel,
+      geodesicEnergy, Metric.Coordinate.quadraticForm,
+      ContinuousLinearMap.map_add, ContinuousLinearMap.map_smul] using henergy
+  have henergyConst :
+      HasDerivAt energyLine (2 * metricPairingAt data.metricField p v w) 0 := by
+    exact (hasDerivAt_initialMetricQuadratic_line (n := n) data p v w).congr_of_eventuallyEq
+      heqEnergy
+  have hc_eq : 2 * c = 2 * metricPairingAt data.metricField p v w :=
+    HasDerivAt.unique henergyFormula henergyConst
+  have hc : c = metricPairingAt data.metricField p v w := by
+    linarith
+  exact hc ▸ hradial
 
 theorem hasRadialVariationInterchange_of_localRiemannianData
     (data : LocalRiemannianData n)
