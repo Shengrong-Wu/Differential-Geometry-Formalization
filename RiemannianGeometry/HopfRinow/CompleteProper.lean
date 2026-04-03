@@ -83,19 +83,17 @@ instance coordinate_properSpace {n : ℕ} :
   inferInstance
 
 /-- At the coordinate level, completeness implies properness. This is immediate because
-`Fin n → ℝ` is always proper (finite-dimensional normed space). -/
+`Fin n → ℝ` is always proper (finite-dimensional normed space). No Christoffel data is needed. -/
 theorem coordinate_complete_implies_proper
-    {n : ℕ}
-    (_Gamma : LeviCivita.CoordinateField.SmoothChristoffelField n) :
+    {n : ℕ} :
     RiemannianComplete (Exponential.Coordinate.Position n) →
       RiemannianProper (Exponential.Coordinate.Position n) :=
   fun _ => riemannianProper_of_properSpace
 
 /-- Package the coordinate-level complete→proper result into the `CompleteProperData` interface. -/
 def coordinate_completeProperData
-    {n : ℕ}
-    (Gamma : LeviCivita.CoordinateField.SmoothChristoffelField n) :
+    {n : ℕ} :
     CompleteProperData (Exponential.Coordinate.Position n) where
-  complete_proper := coordinate_complete_implies_proper Gamma
+  complete_proper := coordinate_complete_implies_proper
 
 end HopfRinow

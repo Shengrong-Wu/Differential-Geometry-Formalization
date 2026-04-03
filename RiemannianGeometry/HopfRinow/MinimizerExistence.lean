@@ -88,19 +88,18 @@ theorem coordinate_minimizingGeodesicsExist {n : ℕ} :
   fun p q => ⟨coordinateStraightLine p q,
     coordinateStraightLine_isMinimizingGeodesicBetween p q⟩
 
-/-- At the coordinate level, completeness implies minimizing geodesics exist. -/
-theorem coordinate_complete_implies_minimizers {n : ℕ}
-    (_Gamma : LeviCivita.CoordinateField.SmoothChristoffelField n) :
+/-- At the coordinate level, completeness implies minimizing geodesics exist.
+Straight lines in `Position n` are minimizing; no Christoffel data is needed. -/
+theorem coordinate_complete_implies_minimizers {n : ℕ} :
     RiemannianComplete (Exponential.Coordinate.Position n) →
       MinimizingGeodesicsExist (Exponential.Coordinate.Position n) :=
   fun _ => coordinate_minimizingGeodesicsExist
 
 /-- Package the coordinate-level complete→minimizers result into the `MinExistenceData` interface. -/
 def coordinate_minExistenceData
-    {n : ℕ}
-    (Gamma : LeviCivita.CoordinateField.SmoothChristoffelField n) :
+    {n : ℕ} :
     MinExistenceData (Exponential.Coordinate.Position n) where
-  complete_minimizers := coordinate_complete_implies_minimizers Gamma
+  complete_minimizers := coordinate_complete_implies_minimizers
 
 /-! ### Geodesic extension for Position n (L∞ metric)
 
@@ -138,14 +137,14 @@ private theorem exists_norm_eq_coordinate
     ∃ i : Fin n, ‖x i‖ = ‖x‖ := by
   classical
   let s : Finset (Fin n) := Finset.univ
-  have hs : s.Nonempty := by simpa [s] using Finset.univ_nonempty
+  have hs : s.Nonempty := by simp [s]
   obtain ⟨i, hi, hsup⟩ := Finset.exists_mem_eq_sup' (s := s) hs (fun j => ‖x j‖)
   refine ⟨i, le_antisymm ?_ ?_⟩
   · exact norm_le_pi_norm x i
   · refine (pi_norm_le_iff_of_nonneg (norm_nonneg _)).2 ?_
     intro j
     rw [← hsup]
-    exact Finset.le_sup' (f := fun k => ‖x k‖) (by simpa [s] using (show j ∈ Finset.univ from by simp))
+    exact Finset.le_sup' (f := fun k => ‖x k‖) (by simp [s])
 
 private noncomputable def coordSign (x : ℝ) : ℝ :=
   if 0 ≤ x then 1 else -1
@@ -188,9 +187,9 @@ Proof: Lipschitz gives f(s)-f(b) ≤ L(b-s) (upper from (s,b) pair).
 And f(s₀)-f(s) ≤ L(s-s₀) (from (s₀,s) pair), combined with the known
 f(s₀)-f(b) = L(b-s₀), gives f(s)-f(b) ≥ L(b-s). -/
 private theorem lipschitz_squeeze_right
-    {f : ℝ → ℝ} {L : ℝ} (hL : 0 ≤ L)
+    {f : ℝ → ℝ} {L : ℝ} (_hL : 0 ≤ L)
     (hLip : ∀ s t : ℝ, |f s - f t| ≤ L * |s - t|)
-    {s₀ b : ℝ} (hs₀b : s₀ ≤ b)
+    {s₀ b : ℝ} (_hs₀b : s₀ ≤ b)
     (hval : f s₀ - f b = L * (b - s₀)) :
     ∀ s, s₀ ≤ s → s ≤ b → f s - f b = L * (b - s) := by
   intro s hs₀s hsb
@@ -213,7 +212,7 @@ private theorem lipschitz_squeeze_right
   linarith
 
 private theorem lipschitz_squeeze_right_on
-    {f : ℝ → ℝ} {L s₀ b : ℝ} (hL : 0 ≤ L)
+    {f : ℝ → ℝ} {L s₀ b : ℝ} (_hL : 0 ≤ L)
     (hLip : ∀ ⦃s t : ℝ⦄, s₀ ≤ s → s ≤ b → s₀ ≤ t → t ≤ b → |f s - f t| ≤ L * |s - t|)
     (hs₀b : s₀ ≤ b)
     (hval : f s₀ - f b = L * (b - s₀)) :
@@ -236,7 +235,7 @@ private theorem lipschitz_squeeze_right_on
   linarith
 
 private theorem lipschitz_squeeze_left_on
-    {f : ℝ → ℝ} {L a t₁ : ℝ} (hL : 0 ≤ L)
+    {f : ℝ → ℝ} {L a t₁ : ℝ} (_hL : 0 ≤ L)
     (hLip : ∀ ⦃s t : ℝ⦄, a ≤ s → s ≤ t₁ → a ≤ t → t ≤ t₁ → |f s - f t| ≤ L * |s - t|)
     (hat₁ : a ≤ t₁)
     (hval : f t₁ - f a = L * (t₁ - a)) :
@@ -470,7 +469,7 @@ private theorem crossing_dist_chord_right
     rw [dist_eq_norm]
     have : γ b - chordExtension (n := n) γ a b t =
         -(((t - b) / (b - a)) • (γ b - γ a)) := by
-      ext i; simp [chordExtension_coord, Pi.sub_apply, smul_eq_mul, neg_mul, neg_div]
+      ext i; simp [chordExtension_coord, Pi.sub_apply, smul_eq_mul]
     rw [this, norm_neg, norm_smul, Real.norm_eq_abs, abs_div,
       abs_of_nonneg (by linarith), abs_of_pos hba, ← dist_eq_norm, dist_comm]
     rw [hdist_ab]; field_simp
@@ -566,7 +565,7 @@ private noncomputable def segmentChordExtension
     (γ : ℝ → Exponential.Coordinate.Position n)
     (a b : ℝ) :
     ℝ → Exponential.Coordinate.Position n :=
-  fun t => if h : t ∈ Set.Icc a b then γ t else chordExtension (n := n) γ a b t
+  fun t => if _h : t ∈ Set.Icc a b then γ t else chordExtension (n := n) γ a b t
 
 @[simp] private theorem segmentChordExtension_of_mem
     {γ : ℝ → Exponential.Coordinate.Position n} {a b t : ℝ}
@@ -612,7 +611,7 @@ private noncomputable def segmentChordExtension
     {γ : ℝ → Exponential.Coordinate.Position n} {a b : ℝ}
     (hab : a < b) :
     segmentChordExtension (n := n) γ a b b = γ b := by
-  simp [segmentChordExtension, hab.le, le_rfl]
+  simp [segmentChordExtension, hab.le]
 
 /-- At the coordinate level, every constant-speed geodesic segment in the L∞ metric extends
 to a global local geodesic line.
@@ -837,7 +836,7 @@ theorem coordinate_hasGeodesicExtension :
               simpa [segmentChordExtension_of_mem (n := n) hsI,
                 segmentChordExtension_of_mem (n := n) huI] using hγ.2 hsI huI
     · intro t ht
-      simpa [segmentChordExtension_of_mem (n := n) ht]
+      simp [segmentChordExtension_of_mem (n := n) ht]
   · haveI : IsEmpty (Fin n) := not_nonempty_iff.mp hn
     haveI : Subsingleton (Exponential.Coordinate.Position n) := by infer_instance
     have hdist_ab : dist (γ a) (γ b) = c * (b - a) := by

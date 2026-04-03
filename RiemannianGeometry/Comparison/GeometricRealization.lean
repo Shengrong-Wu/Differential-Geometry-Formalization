@@ -490,4 +490,138 @@ theorem rauch_lowerComparison_of_fullLocalSetup
     (frame_normal_on_modelPosDomain_of_fullLocalSetup setup)
     setup.matrixCurvatureCoords
 
+/-! ## Curvature linearity constructor
+
+When the curvature tensor is linear in its first argument and the basis-column identity holds,
+the full `matrixCurvatureCoords` field can be derived internally. This is the preferred end state
+described in the agent memo: the coefficient matrix is obtained from transported curvature, not
+from a hand-filled hypothesis. -/
+
+/-- Construct `FullRauchComparisonLocalSetup` from curvature linearity and the basis-column
+identity `A(t)_ij = ⟨R(eⱼ(t), T(t)) T(t), eᵢ(t)⟩_g`, without postulating the full
+componentwise `matrixCurvatureCoords` directly.
+
+In actual Riemannian geometry the curvature tensor is always multilinear, and the basis identity
+is the *definition* of the Jacobi coefficient matrix. So this constructor captures the genuine
+geometric content with no artificial inflation. -/
+noncomputable def FullRauchComparisonLocalSetup.ofCurvatureLinearity
+    {C : LeviCivita.ConnectionContext (CoordinateVector n) ℝ}
+    {sys : Jacobi.CoordinateJacobiSystem n} {k : ℝ}
+    (geom : CoordinateParallelJacobiGeometryData (n := n) (C := C) sys k)
+    (hgcont : ∀ i j, Continuous fun t => geom.metric t i j)
+    (pairingCompat_transport :
+      ∀ t ∈ Set.Ioo (-(coordinateTransportData geom.connectionA geom.connectionA_cont).ε)
+          (coordinateTransportData geom.connectionA geom.connectionA_cont).ε,
+        geom.metricDeriv t =
+          Matrix.transpose (geom.connectionA t) * geom.metric t +
+            geom.metric t * geom.connectionA t)
+    (transport_contains_modelPosDomain :
+      modelPosDomain k ⊆
+        transportDomain (coordinateParallelTransport geom.connectionA geom.connectionA_cont))
+    (sectionalUpper :
+      NormalizedSectionalUpperBoundAlongCoordinate geom.metric geom.curvature geom.tangent k)
+    (tangent_unit :
+      ∀ t, coordinatePairingAt (geom.metric t) (geom.tangent t) (geom.tangent t) = 1)
+    (tangent_parallel :
+      IsParallelAlong
+        (coordinateParallelAlongDerivative geom.connectionA geom.connectionA_cont) geom.tangent)
+    (initialFrameOrthonormal :
+      ∀ i j,
+        coordinatePairingAt (geom.metric 0) (coordinateBasisVector i) (coordinateBasisVector j) =
+          if i = j then 1 else 0)
+    (initialFrameNormal :
+      ∀ i,
+        coordinatePairingAt (geom.metric 0) (coordinateBasisVector i) (geom.tangent 0) = 0)
+    (basisCurvatureCoords :
+      ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k → ∀ i j,
+        sys.A t i j =
+          coordinatePairingAt (geom.metric t)
+            (geom.curvature
+              ((coordinateParallelFrame geom.connectionA geom.connectionA_cont).vec j t)
+              (geom.tangent t) (geom.tangent t))
+            ((coordinateParallelFrame geom.connectionA geom.connectionA_cont).vec i t)) :
+    FullRauchComparisonLocalSetup (n := n) (C := C) sys k where
+  __ := geom
+  hgcont := hgcont
+  pairingCompat_transport := pairingCompat_transport
+  transport_contains_modelPosDomain := transport_contains_modelPosDomain
+  sectionalUpper := sectionalUpper
+  tangent_unit := tangent_unit
+  tangent_parallel := tangent_parallel
+  initialFrameOrthonormal := initialFrameOrthonormal
+  initialFrameNormal := initialFrameNormal
+  matrixCurvatureCoords := by
+    intro t ht ξ i
+    exact matrixCurvatureCoords_of_basisAndLinearity
+      (coordinateParallelFrame geom.connectionA geom.connectionA_cont)
+      geom.curvature.add_left geom.curvature.smul_left (basisCurvatureCoords ht) ξ i
+
+/-- Canonical-system convenience wrapper over `ofCurvatureLinearity`.
+
+When the coefficient system `sys` is definitionally identified with the transported-curvature
+matrix `canonicalJacobiSystemOfCurvature`, the basis-column identity is automatic and callers do
+not need to pass it separately. -/
+noncomputable def FullRauchComparisonLocalSetup.ofCanonicalCurvatureSystem
+    {C : LeviCivita.ConnectionContext (CoordinateVector n) ℝ}
+    {sys : Jacobi.CoordinateJacobiSystem n} {k : ℝ}
+    (geom : CoordinateParallelJacobiGeometryData (n := n) (C := C) sys k)
+    (Acont : ∀ i j, Continuous fun t =>
+      coordinatePairingAt (geom.metric t)
+        (geom.curvature
+          ((coordinateParallelFrame geom.connectionA geom.connectionA_cont).vec j t)
+          (geom.tangent t) (geom.tangent t))
+        ((coordinateParallelFrame geom.connectionA geom.connectionA_cont).vec i t))
+    (hsys :
+      sys =
+        canonicalJacobiSystemOfCurvature
+          geom.metric geom.curvature geom.tangent
+          (coordinateParallelFrame geom.connectionA geom.connectionA_cont) Acont)
+    (hgcont : ∀ i j, Continuous fun t => geom.metric t i j)
+    (pairingCompat_transport :
+      ∀ t ∈ Set.Ioo (-(coordinateTransportData geom.connectionA geom.connectionA_cont).ε)
+          (coordinateTransportData geom.connectionA geom.connectionA_cont).ε,
+        geom.metricDeriv t =
+          Matrix.transpose (geom.connectionA t) * geom.metric t +
+            geom.metric t * geom.connectionA t)
+    (transport_contains_modelPosDomain :
+      modelPosDomain k ⊆
+        transportDomain (coordinateParallelTransport geom.connectionA geom.connectionA_cont))
+    (sectionalUpper :
+      NormalizedSectionalUpperBoundAlongCoordinate geom.metric geom.curvature geom.tangent k)
+    (tangent_unit :
+      ∀ t, coordinatePairingAt (geom.metric t) (geom.tangent t) (geom.tangent t) = 1)
+    (tangent_parallel :
+      IsParallelAlong
+        (coordinateParallelAlongDerivative geom.connectionA geom.connectionA_cont) geom.tangent)
+    (initialFrameOrthonormal :
+      ∀ i j,
+        coordinatePairingAt (geom.metric 0) (coordinateBasisVector i) (coordinateBasisVector j) =
+          if i = j then 1 else 0)
+    (initialFrameNormal :
+      ∀ i,
+        coordinatePairingAt (geom.metric 0) (coordinateBasisVector i) (geom.tangent 0) = 0) :
+    FullRauchComparisonLocalSetup (n := n) (C := C) sys k := by
+  have hbasis :
+      ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k → ∀ i j,
+        sys.A t i j =
+          coordinatePairingAt (geom.metric t)
+            (geom.curvature
+              ((coordinateParallelFrame geom.connectionA geom.connectionA_cont).vec j t)
+              (geom.tangent t) (geom.tangent t))
+            ((coordinateParallelFrame geom.connectionA geom.connectionA_cont).vec i t) := by
+    intro t _ i j
+    have hA :
+        sys.A t i j =
+          (canonicalJacobiSystemOfCurvature
+            geom.metric geom.curvature geom.tangent
+            (coordinateParallelFrame geom.connectionA geom.connectionA_cont) Acont).A t i j := by
+      exact congrArg (fun S : Jacobi.CoordinateJacobiSystem n => S.A t i j) hsys
+    simpa [canonicalJacobiSystemOfCurvature_A] using hA
+  exact FullRauchComparisonLocalSetup.ofCurvatureLinearity
+    (geom := geom)
+    hgcont pairingCompat_transport transport_contains_modelPosDomain
+    sectionalUpper tangent_unit tangent_parallel
+    initialFrameOrthonormal initialFrameNormal
+    hbasis
+
 end Comparison

@@ -425,6 +425,48 @@ theorem hasRayleighUpperBoundOn_of_coordinateFrame
           rw [frameLift_norm_sq_of_pointwise_orthonormal
             (g := g) frame t ξ (hframe_orthonormal t ht)]
 
+/-- Pointwise local Rayleigh bound from a direct quadratic-form curvature identity in a chosen
+orthonormal normal frame. This is the weaker bridge actually needed by the Rayleigh side of the
+lower-Rauch route when the full componentwise `matrixCurvatureCoords` theorem is unavailable. -/
+theorem hasRayleighUpperBoundOn_of_coordinateFrameQuadratic
+    {C : LeviCivita.ConnectionContext (CoordinateVector n) ℝ}
+    {g : ℝ → Matrix (Fin n) (Fin n) ℝ}
+    {R : Curvature.CurvatureTensor C}
+    {T : ParallelTransport.FieldAlong (CoordinateVector n)}
+    {sys : Jacobi.CoordinateJacobiSystem n}
+    {s : Set ℝ} {k : ℝ}
+    (frame : ParallelTransport.ParallelFrame (Fin n) (CoordinateVector n))
+    (hsec : NormalizedSectionalUpperBoundAlongCoordinate (n := n) g R T k)
+    (htangent_unit :
+      ∀ t ∈ s, coordinatePairingAt (g t) (T t) (T t) = 1)
+    (hframe_orthonormal :
+      ∀ t ∈ s, ∀ i j,
+        coordinatePairingAt (g t) (frame.vec i t) (frame.vec j t) =
+          if i = j then 1 else 0)
+    (hframe_normal :
+      ∀ t ∈ s, ∀ i,
+        coordinatePairingAt (g t) (frame.vec i t) (T t) = 0)
+    (hcurvatureQuad :
+      ∀ t ∈ s, ∀ ξ,
+        matrixQuadForm (sys.A t) ξ =
+          coordinatePairingAt (g t)
+            (R (frameLift frame t ξ) (T t) (T t))
+            (frameLift frame t ξ)) :
+    HasRayleighUpperBoundOn sys.A s k := by
+  intro t ht ξ
+  calc
+    matrixQuadForm (sys.A t) ξ
+        = coordinatePairingAt (g t)
+            (R (frameLift frame t ξ) (T t) (T t))
+            (frameLift frame t ξ) := hcurvatureQuad t ht ξ
+    _ ≤ k * coordinatePairingAt (g t) (frameLift frame t ξ) (frameLift frame t ξ) := by
+          exact hsec t (frameLift frame t ξ) (htangent_unit t ht)
+            (frameLift_normal_of_pointwise_normal
+              (g := g) (T := T) frame t ξ (hframe_normal t ht))
+    _ = k * vecNormSq ξ := by
+          rw [frameLift_norm_sq_of_pointwise_orthonormal
+            (g := g) frame t ξ (hframe_orthonormal t ht)]
+
 /-- Concrete coordinate-frame version of the second Rauch gap: if the Jacobi coefficient matrix
 records the coordinates of the curvature vector in an orthonormal normal frame along a unit-speed
 geodesic, then the normalized sectional-curvature upper bound implies the Rayleigh inequality
@@ -451,5 +493,93 @@ theorem hasRayleighUpperBound_of_coordinateFrameCurvatureBridge
             (frameLift_normal (bridge := bridge) t ξ)
     _ = k * vecNormSq ξ := by
           rw [frameLift_norm_sq (bridge := bridge) t ξ]
+
+/-! ### Curvature linearity bridge
+
+When the curvature tensor is linear in its first argument (as it always is in actual Riemannian
+geometry), the full componentwise matrix curvature-coordinate bridge follows algebraically from the
+basis-column identity `A(t)_ij = ⟨R(eⱼ(t), T(t)) T(t), eᵢ(t)⟩_g`. This eliminates the need to
+postulate `matrixCurvatureCoords` directly. -/
+
+private theorem curvature_sum_smul_left
+    {C : LeviCivita.ConnectionContext (CoordinateVector n) ℝ}
+    {R : Curvature.CurvatureTensor C}
+    (hadd : ∀ (x y z w : CoordinateVector n), R (x + y) z w = R x z w + R y z w)
+    (hsmul : ∀ (a : ℝ) (x y z : CoordinateVector n), R (a • x) y z = a • R x y z)
+    (E : Fin n → CoordinateVector n) (ξ : CoordinateVector n)
+    (y z : CoordinateVector n) :
+    R (∑ i : Fin n, ξ i • E i) y z = ∑ i : Fin n, ξ i • R (E i) y z := by
+  classical
+  refine Finset.induction_on (s := (Finset.univ : Finset (Fin n))) ?base ?step
+  · simp only [Finset.sum_empty]
+    calc R (0 : CoordinateVector n) y z
+        = R ((0 : ℝ) • (0 : CoordinateVector n)) y z := by rw [zero_smul]
+      _ = (0 : ℝ) • R (0 : CoordinateVector n) y z := hsmul 0 0 y z
+      _ = 0 := zero_smul _ _
+  · intro i s hi hs
+    rw [Finset.sum_insert hi, hadd, hs, hsmul, Finset.sum_insert hi]
+
+/-- The full componentwise matrix curvature-coordinate bridge, derived from curvature linearity
+in the first argument and the basis-column identity `A(t)_ij = ⟨R(eⱼ(t), T(t)) T(t), eᵢ(t)⟩_g`.
+
+Given:
+* `hadd` / `hsmul` — `R` is additive and homogeneous in its first slot,
+* `hbasis` — each matrix entry `A(t)_ij` equals the metric pairing of `R(eⱼ, T)T` with `eᵢ`,
+
+the full `(A(t)·ξ)ᵢ = ⟨R(∑ⱼ ξⱼ eⱼ, T)T, eᵢ⟩_g` follows algebraically. -/
+theorem matrixCurvatureCoords_of_basisAndLinearity
+    {C : LeviCivita.ConnectionContext (CoordinateVector n) ℝ}
+    {sys : Jacobi.CoordinateJacobiSystem n}
+    {g : ℝ → Matrix (Fin n) (Fin n) ℝ}
+    {R : Curvature.CurvatureTensor C}
+    {T : FieldAlong (CoordinateVector n)}
+    (frame : ParallelTransport.ParallelFrame (Fin n) (CoordinateVector n))
+    (hadd : ∀ (x y z w : CoordinateVector n), R (x + y) z w = R x z w + R y z w)
+    (hsmul : ∀ (a : ℝ) (x y z : CoordinateVector n), R (a • x) y z = a • R x y z)
+    {t : ℝ}
+    (hbasis : ∀ i j,
+      sys.A t i j =
+        coordinatePairingAt (g t) (R (frame.vec j t) (T t) (T t)) (frame.vec i t))
+    (ξ : CoordinateVector n) (i : Fin n) :
+    (Matrix.mulVec (sys.A t) ξ) i =
+      coordinatePairingAt (g t) (R (frameLift frame t ξ) (T t) (T t)) (frame.vec i t) := by
+  have hcurv_expand :
+      R (frameLift frame t ξ) (T t) (T t) =
+        ∑ j : Fin n, ξ j • R (frame.vec j t) (T t) (T t) := by
+    simp only [frameLift]
+    exact curvature_sum_smul_left hadd hsmul (fun j => frame.vec j t) ξ (T t) (T t)
+  rw [hcurv_expand, coordinatePairingAt_sum_smul_left]
+  simp only [Matrix.mulVec, dotProduct]
+  refine Finset.sum_congr rfl ?_
+  intro j _
+  rw [hbasis i j]
+  ring
+
+/-- The canonical Jacobi coefficient matrix built from curvature: `A(t)_ij := ⟨R(eⱼ(t), T(t))T(t), eᵢ(t)⟩_g`.
+With this definition, the basis-column identity `basisCurvatureCoords` holds by `rfl`. -/
+noncomputable def canonicalJacobiSystemOfCurvature
+    {C : LeviCivita.ConnectionContext (CoordinateVector n) ℝ}
+    (g : ℝ → Matrix (Fin n) (Fin n) ℝ)
+    (R : Curvature.CurvatureTensor C)
+    (T : FieldAlong (CoordinateVector n))
+    (frame : ParallelTransport.ParallelFrame (Fin n) (CoordinateVector n))
+    (Acont : ∀ i j, Continuous fun t =>
+      coordinatePairingAt (g t) (R (frame.vec j t) (T t) (T t)) (frame.vec i t)) :
+    Jacobi.CoordinateJacobiSystem n where
+  A t i j := coordinatePairingAt (g t) (R (frame.vec j t) (T t) (T t)) (frame.vec i t)
+  Acont := Acont
+
+@[simp] theorem canonicalJacobiSystemOfCurvature_A
+    {C : LeviCivita.ConnectionContext (CoordinateVector n) ℝ}
+    (g : ℝ → Matrix (Fin n) (Fin n) ℝ)
+    (R : Curvature.CurvatureTensor C)
+    (T : FieldAlong (CoordinateVector n))
+    (frame : ParallelTransport.ParallelFrame (Fin n) (CoordinateVector n))
+    (Acont : ∀ i j, Continuous fun t =>
+      coordinatePairingAt (g t) (R (frame.vec j t) (T t) (T t)) (frame.vec i t))
+    (t : ℝ) (i j : Fin n) :
+    (canonicalJacobiSystemOfCurvature g R T frame Acont).A t i j =
+      coordinatePairingAt (g t) (R (frame.vec j t) (T t) (T t)) (frame.vec i t) :=
+  rfl
 
 end Comparison

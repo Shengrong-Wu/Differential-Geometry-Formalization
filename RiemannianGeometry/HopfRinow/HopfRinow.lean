@@ -115,13 +115,6 @@ theorem hopfRinowTheorem_of_input
   complete_proper := input.completeProper.complete_proper
   proper_complete := properImpliesComplete_standard
 
-/-- Assembly from the bridge layer. -/
-theorem hopfRinowTheorem_of_bridge
-    {M : Type u} [PseudoMetricSpace M]
-    (bridge : CompleteToHopfRinowData M) :
-    HopfRinowTheorem M :=
-  hopfRinowTheorem_of_input (hopfRinowDataOfBridge bridge)
-
 /-- Export the four Hopf-Rinow implications as a conjunction. -/
 theorem hopfRinow_equivalences
     {M : Type u} [PseudoMetricSpace M]
@@ -136,20 +129,20 @@ theorem hopfRinow_equivalences
 
 Wire the three proved directions into the full `HopfRinowTheorem` for `Position n`. -/
 
-/-- Coordinate-level Hopf-Rinow data package, assembling the three directions. -/
-def coordinate_hopfRinowData
-    {n : ℕ}
-    (Gamma : LeviCivita.CoordinateField.SmoothChristoffelField n) :
-    HopfRinowData (Exponential.Coordinate.Position n) where
-  geodesicExtension := coordinate_geodesicExtensionData_direct
-  minimizers := coordinate_minExistenceData Gamma
-  completeProper := coordinate_completeProperData Gamma
+/-- **Coordinate-level Hopf-Rinow theorem.**
 
-/-- Coordinate-level Hopf-Rinow theorem, assembling from the data package. -/
+All four directions hold for `Position n = Fin n → ℝ` with no external geometric input:
+
+- **Complete → geodesically complete**: chord extension in L∞.
+- **Complete → minimizers exist**: straight lines are minimizing.
+- **Complete → proper**: finite-dimensional normed space is always proper.
+- **Proper → complete**: Mathlib standard. -/
 theorem coordinate_hopfRinowTheorem
-    {n : ℕ}
-    (Gamma : LeviCivita.CoordinateField.SmoothChristoffelField n) :
+    {n : ℕ} :
     HopfRinowTheorem (Exponential.Coordinate.Position n) :=
-  hopfRinowTheorem_of_input (coordinate_hopfRinowData Gamma)
+  hopfRinowTheoremOfGeometricDirections
+    (fun _ => coordinate_hasGeodesicExtension)
+    (fun _ => coordinate_minimizingGeodesicsExist)
+    (fun _ => riemannianProper_of_properSpace)
 
 end HopfRinow

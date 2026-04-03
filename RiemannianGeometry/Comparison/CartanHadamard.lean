@@ -1,4 +1,7 @@
 import Comparison.Rauch
+import Comparison.GeometricRealization
+import Comparison.RauchCoordinateJacobiGeometry
+import Comparison.RauchNormCore
 import Comparison.ScalarConvexity
 import Exponential.LocalInverse
 import HopfRinow.HopfRinow
@@ -221,6 +224,220 @@ theorem not_conjugatePointAtZero_of_scalarJacobiReduction
   have hnorm_b := hnorm data hdata0 hJne b hb
   have : ‖J data b‖ = 0 := by rw [hJb]; simp
   linarith
+
+/-! ### Geometric constructor for SquaredNormJacobiReduction
+
+Under nonpositive curvature (`k ≤ 0`), the squared norm `u(t) = ‖ξ(t)‖²` of the coordinate
+Jacobi field in a parallel frame satisfies:
+
+* `u(0) = 0` — the field starts at the base point
+* `u'(0) = 0` — by `⟨0, ξ'(0)⟩ = 0`
+* `u''(t) = 2(‖ξ'‖² − ⟨A ξ, ξ⟩) ≥ 0` — from the Rayleigh bound `⟨Aξ,ξ⟩ ≤ k‖ξ‖²` with `k ≤ 0`
+* `u''(0) > 0` — from `‖ξ'(0)‖² > 0` (nontrivial initial velocity)
+
+The endpoint derivative hypotheses at `t = 0` are the only additional input beyond the
+on-domain Jacobi data: they ensure `HasDerivAt` at the boundary point excluded from
+`modelPosDomain k`. -/
+
+/-- Construct a `SquaredNormJacobiReduction` from coordinate Jacobi data and a Rayleigh upper
+bound under nonpositive curvature. -/
+noncomputable def SquaredNormJacobiReduction.ofCoordinateJacobi
+    {n : ℕ} (sys : Jacobi.CoordinateJacobiSystem n) {k : ℝ} (hk : k ≤ 0)
+    (J J' : ℝ → Fin n → ℝ)
+    (initialValue : J 0 = 0)
+    (componentDeriv :
+      ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k →
+        ∀ i : Fin n, HasDerivAt (fun s => J s i) (J' t i) t)
+    (componentSecondDeriv :
+      ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k →
+        ∀ i : Fin n, HasDerivAt (fun s => J' s i) (-(Matrix.mulVec (sys.A t) (J t)) i) t)
+    (hRayleigh : HasRayleighUpperBoundOn sys.A (modelPosDomain k) k)
+    (componentDeriv_zero :
+      ∀ i : Fin n, HasDerivAt (fun s => J s i) (J' 0 i) 0)
+    (componentSecondDeriv_zero :
+      ∀ i : Fin n, HasDerivAt (fun s => J' s i) (-(Matrix.mulVec (sys.A 0) (J 0)) i) 0)
+    (initialVelocityPos : 0 < vecNormSq (J' 0)) :
+    SquaredNormJacobiReduction where
+  normSqFn := jacobi_normSq J
+  normSqDeriv := fun t => 2 * vecInner (J t) (J' t)
+  normSqSecondDeriv := fun t =>
+    2 * (vecNormSq (J' t) - matrixQuadForm (sys.A t) (J t))
+  normSqFn_zero := by
+    show vecNormSq (J 0) = 0
+    rw [initialValue]
+    simp [vecNormSq]
+  normSqDeriv_zero := by
+    show 2 * vecInner (J 0) (J' 0) = 0
+    rw [initialValue]
+    simp [vecInner]
+  normSqSecondDeriv_zero_pos := by
+    show 0 < 2 * (vecNormSq (J' 0) - matrixQuadForm (sys.A 0) (J 0))
+    have hquad : matrixQuadForm (sys.A 0) (J 0) = 0 := by
+      rw [initialValue]
+      simp [matrixQuadForm, vecInner, Matrix.mulVec, dotProduct]
+    rw [hquad, sub_zero]
+    linarith
+  hasDeriv_zero :=
+    hasDerivAt_jacobi_normSq componentDeriv_zero
+  hasDeriv := fun t ht =>
+    hasDerivAt_jacobi_normSq (componentDeriv (mem_modelPosDomain_of_nonpos_of_pos hk ht))
+  hasSecondDeriv_zero :=
+    hasDerivAt_jacobi_velocityPairing sys componentDeriv_zero componentSecondDeriv_zero
+  hasSecondDeriv := fun t ht =>
+    hasDerivAt_jacobi_velocityPairing sys
+      (componentDeriv (mem_modelPosDomain_of_nonpos_of_pos hk ht))
+      (componentSecondDeriv (mem_modelPosDomain_of_nonpos_of_pos hk ht))
+  normSqSecondDeriv_nonneg := by
+    intro t ht
+    have hmem := mem_modelPosDomain_of_nonpos_of_pos hk ht
+    have hray := hRayleigh hmem (J t)
+    have hnorm_vel := vecNormSq_nonneg (J' t)
+    have hnorm_pos := vecNormSq_nonneg (J t)
+    nlinarith
+
+/-- Construct a `SquaredNormJacobiReduction` directly from coordinate parallel-frame
+geometry data, with no separate endpoint parameters.
+
+The endpoint derivatives at `t = 0` are derived from the `_zero` fields of
+`CoordinateParallelJacobiGeometryData`, and `initialVelocityPos` is forwarded directly.
+The on-domain curvature identity `hfieldCurvatureCoords` is needed for the second-derivative
+bridge on `modelPosDomain k`. -/
+noncomputable def SquaredNormJacobiReduction.ofCoordinateGeometry
+    {n : ℕ} {C : LeviCivita.ConnectionContext (ParallelTransport.CoordinateVector n) ℝ}
+    (sys : Jacobi.CoordinateJacobiSystem n) {k : ℝ} (hk : k ≤ 0)
+    (geom : CoordinateParallelJacobiGeometryData (n := n) (C := C) sys k)
+    (hfieldCurvatureCoords :
+      ∀ ⦃t : ℝ⦄, t ∈ modelPosDomain k → ∀ i : Fin n,
+        ParallelTransport.coordinatePairingAt (geom.metric t)
+          (geom.curvature (geom.field t) (geom.tangent t) (geom.tangent t))
+          (((ParallelTransport.coordinateParallelFrame
+              geom.connectionA geom.connectionA_cont).vec i t)) =
+            (Matrix.mulVec (sys.A t)
+              ((coordinateParallelCoeffs geom.metric geom.connectionA geom.connectionA_cont
+                geom.field) t)) i)
+    (hRayleigh : HasRayleighUpperBoundOn sys.A (modelPosDomain k) k) :
+    SquaredNormJacobiReduction :=
+  let bridge := geom.toPositivityBridge_of_fieldCurvatureCoords hfieldCurvatureCoords
+  SquaredNormJacobiReduction.ofCoordinateJacobi sys hk
+    (coordinateParallelCoeffs geom.metric geom.connectionA geom.connectionA_cont geom.field)
+    (coordinateParallelCovDerivCoeffs geom.metric geom.connectionA geom.connectionA_cont
+      geom.covDeriv)
+    (by
+      have h0 : geom.field 0 = 0 := geom.fieldZero
+      funext i
+      simp only [coordinateParallelCoeffs]
+      rw [h0]
+      simp [ParallelTransport.coordinatePairingAt])
+    (by intro t ht i; exact hasDerivAt_coordinateParallelCoeff sys k bridge ht i)
+    (by intro t ht i; exact hasDerivAt_coordinateParallelCovDerivCoeff sys k bridge ht i)
+    hRayleigh
+    (fun i => hasDerivAt_coordinateParallelCoeff_atZero sys k geom i)
+    (fun i => hasDerivAt_coordinateParallelCovDerivCoeff_atZero sys k geom i)
+    geom.initialVelocityPos
+
+/-- Build `SquaredNormJacobiReduction` directly from the active local/full comparison setup under
+nonpositive curvature. This removes the remaining user-facing plumbing through
+`hfieldCurvatureCoords` and `hRayleigh` once the local geometric setup has already been assembled.
+-/
+noncomputable def SquaredNormJacobiReduction.ofFullLocalSetup
+    {n : ℕ} {C : LeviCivita.ConnectionContext (ParallelTransport.CoordinateVector n) ℝ}
+    (sys : Jacobi.CoordinateJacobiSystem n) {k : ℝ} (hk : k ≤ 0)
+    (setup : FullRauchComparisonLocalSetup (n := n) (C := C) sys k) :
+    SquaredNormJacobiReduction :=
+  let geom := setup.toCoordinateParallelJacobiGeometryData
+  let bridge :=
+    geom.toPositivityBridge
+      (frame_orthonormal_on_modelPosDomain_of_fullLocalSetup setup)
+      setup.matrixCurvatureCoords
+  SquaredNormJacobiReduction.ofCoordinateJacobi sys hk
+    (coordinateParallelCoeffs geom.metric geom.connectionA geom.connectionA_cont geom.field)
+    (coordinateParallelCovDerivCoeffs geom.metric geom.connectionA geom.connectionA_cont
+      geom.covDeriv)
+    (by
+      have h0 : geom.field 0 = 0 := geom.fieldZero
+      funext i
+      simp only [coordinateParallelCoeffs]
+      rw [h0]
+      simp [ParallelTransport.coordinatePairingAt])
+    (by
+      intro t ht i
+      exact hasDerivAt_coordinateParallelCoeff sys k bridge ht i)
+    (by
+      intro t ht i
+      exact hasDerivAt_coordinateParallelCovDerivCoeff sys k bridge ht i)
+    (hasRayleighUpperBoundOn_modelPosDomain_of_fullLocalSetup setup)
+    (fun i => hasDerivAt_coordinateParallelCoeff_atZero sys k geom i)
+    (fun i => hasDerivAt_coordinateParallelCovDerivCoeff_atZero sys k geom i)
+    geom.initialVelocityPos
+
+/-- Canonical-system convenience wrapper for the Cartan-Hadamard squared-norm reduction.
+
+When `sys` is identified with the curvature-built canonical coefficient system, the caller can
+work directly from the local/full geometric setup data without separately threading the basis
+curvature identity or Rayleigh bridge. The remaining explicit interface input is only the
+continuity witness `Acont` for the canonical coefficient matrix. -/
+noncomputable def SquaredNormJacobiReduction.ofCanonicalCurvatureSystem
+    {n : ℕ} {C : LeviCivita.ConnectionContext (ParallelTransport.CoordinateVector n) ℝ}
+    {sys : Jacobi.CoordinateJacobiSystem n} {k : ℝ} (hk : k ≤ 0)
+    (geom : CoordinateParallelJacobiGeometryData (n := n) (C := C) sys k)
+    (Acont : ∀ i j, Continuous fun t =>
+      ParallelTransport.coordinatePairingAt (geom.metric t)
+        (geom.curvature
+          ((ParallelTransport.coordinateParallelFrame
+            geom.connectionA geom.connectionA_cont).vec j t)
+          (geom.tangent t) (geom.tangent t))
+        ((ParallelTransport.coordinateParallelFrame
+          geom.connectionA geom.connectionA_cont).vec i t))
+    (hsys :
+      sys =
+        canonicalJacobiSystemOfCurvature
+          geom.metric geom.curvature geom.tangent
+          (ParallelTransport.coordinateParallelFrame
+            geom.connectionA geom.connectionA_cont) Acont)
+    (hgcont : ∀ i j, Continuous fun t => geom.metric t i j)
+    (pairingCompat_transport :
+      ∀ t ∈ Set.Ioo (-(ParallelTransport.coordinateTransportData
+            geom.connectionA geom.connectionA_cont).ε)
+          (ParallelTransport.coordinateTransportData
+            geom.connectionA geom.connectionA_cont).ε,
+        geom.metricDeriv t =
+          Matrix.transpose (geom.connectionA t) * geom.metric t +
+            geom.metric t * geom.connectionA t)
+    (transport_contains_modelPosDomain :
+      modelPosDomain k ⊆
+        ParallelTransport.transportDomain
+          (ParallelTransport.coordinateParallelTransport
+            geom.connectionA geom.connectionA_cont))
+    (sectionalUpper :
+      NormalizedSectionalUpperBoundAlongCoordinate geom.metric geom.curvature geom.tangent k)
+    (tangent_unit :
+      ∀ t, ParallelTransport.coordinatePairingAt
+        (geom.metric t) (geom.tangent t) (geom.tangent t) = 1)
+    (tangent_parallel :
+      ParallelTransport.IsParallelAlong
+        (ParallelTransport.coordinateParallelAlongDerivative
+          geom.connectionA geom.connectionA_cont) geom.tangent)
+    (initialFrameOrthonormal :
+      ∀ i j,
+        ParallelTransport.coordinatePairingAt
+          (geom.metric 0)
+          (ParallelTransport.coordinateBasisVector i)
+          (ParallelTransport.coordinateBasisVector j) =
+            if i = j then 1 else 0)
+    (initialFrameNormal :
+      ∀ i,
+        ParallelTransport.coordinatePairingAt
+          (geom.metric 0)
+          (ParallelTransport.coordinateBasisVector i)
+          (geom.tangent 0) = 0) :
+    SquaredNormJacobiReduction :=
+  let setup :=
+    FullRauchComparisonLocalSetup.ofCanonicalCurvatureSystem
+      (geom := geom) Acont hsys
+      hgcont pairingCompat_transport transport_contains_modelPosDomain
+      sectionalUpper tangent_unit tangent_parallel
+      initialFrameOrthonormal initialFrameNormal
+  SquaredNormJacobiReduction.ofFullLocalSetup sys hk setup
 
 /-! ### Packaging theorems -/
 
